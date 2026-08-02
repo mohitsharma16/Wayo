@@ -14,6 +14,24 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
+/**
+ * A location fix plus GPS-derived course-over-ground bearing, when available.
+ * `bearing` is only non-null when Android itself is confident in the
+ * direction of travel (typically requires actual movement) -- see
+ * Location.hasBearing() in the Android docs for exactly when that's true.
+ *
+ * `accuracyMeters` is Android's own 68%-confidence accuracy radius for this
+ * fix -- a large value means a weak GPS signal, which no amount of phone
+ * movement fixes (unlike compass calibration); the only real remedy is a
+ * clearer view of the sky.
+ */
+data class LocationUpdate(
+    val latitude: Double,
+    val longitude: Double,
+    val bearing: Float?,
+    val accuracyMeters: Float
+)
+
 class LocationHelper(context: Context) {
 
     private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
@@ -30,7 +48,7 @@ class LocationHelper(context: Context) {
 
     /** Continuous location updates for the live compass/distance screen. */
     @SuppressLint("MissingPermission")
-    fun locationUpdates(): Flow<Pair<Double, Double>> = callbackFlow {
+    fun locationUpdates(): Flow<LocationUpdate> = callbackFlow {
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
             .setMinUpdateIntervalMillis(1000L)
             .build()
@@ -38,8 +56,15 @@ class LocationHelper(context: Context) {
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let {
-                    Log.d("LocationHelper", "location update: ${it.latitude}, ${it.longitude}")
-                    trySend(it.latitude to it.longitude)
+                    // hasBearing() is Android's own confidence check -- it's only
+                    // true when the platform trusts the direction-of-travel
+                    // reading, which in practice means you're actually moving.
+                    val bearing = if (it.hasBearing()) it.bearing else null
+                    Log.d(
+                        "LocationHelper",
+                        "location update: ${it.latitude}, ${it.longitude}, bearing=$bearing, accuracy=${it.accuracy}m"
+                    )
+                    trySend(LocationUpdate(it.latitude, it.longitude, bearing, it.accuracy))
                 }
             }
         }
@@ -53,4 +78,3 @@ class LocationHelper(context: Context) {
         awaitClose { fusedClient.removeLocationUpdates(callback) }
     }
 }
-

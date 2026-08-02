@@ -20,6 +20,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
@@ -183,6 +185,7 @@ fun HomeScreen(
                     HomeState.CAPTURE -> CaptureContent(
                         capturedPhotoPath = capturedPhotoPath,
                         onTakePhoto = { requestPhoto() },
+                        onRemovePhoto = { capturedPhotoPath = null },
                         onParkHere = {
                             viewModel.parkHere(photoPath = capturedPhotoPath, note = null)
                             capturedPhotoPath = null
@@ -225,7 +228,7 @@ private fun PermissionRationale(onRequestPermission: () -> Unit) {
         }
         Spacer(Modifier.height(20.dp))
         Text(
-            "Wayo needs your location to remember where you parked.",
+            "Wayo needs your location to remember where you left this.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -241,6 +244,7 @@ private fun PermissionRationale(onRequestPermission: () -> Unit) {
 private fun CaptureContent(
     capturedPhotoPath: String?,
     onTakePhoto: () -> Unit,
+    onRemovePhoto: () -> Unit,
     onParkHere: () -> Unit
 ) {
     Column(
@@ -254,17 +258,44 @@ private fun CaptureContent(
         )
         Spacer(Modifier.height(24.dp))
 
-        capturedPhotoPath?.let { path ->
+        if (capturedPhotoPath != null) {
             Card(
                 shape = MaterialTheme.shapes.large,
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                PhotoThumbnail(path, size = 96.dp)
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Card(shape = MaterialTheme.shapes.medium) {
+                        PhotoThumbnail(capturedPhotoPath, size = 72.dp)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text("Photo attached", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Helps you recognize the spot later",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = onRemovePhoto) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Remove photo",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(24.dp))
         }
 
-        ParkHereButton(onClick = onParkHere)
+        MarkSpotButton(onClick = onParkHere)
 
         Spacer(Modifier.height(28.dp))
 
@@ -288,7 +319,7 @@ private fun CaptureContent(
  * consistent product instead of a different color choice per screen.
  */
 @Composable
-private fun ParkHereButton(onClick: () -> Unit) {
+private fun MarkSpotButton(onClick: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val infiniteTransition = rememberInfiniteTransition(label = "parkPulse")
 
@@ -349,7 +380,7 @@ private fun ParkHereButton(onClick: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Park here",
+                    "Mark this spot",
                     color = MaterialTheme.colorScheme.onPrimary,
                     style = MaterialTheme.typography.titleMedium
                 )
@@ -404,10 +435,37 @@ private fun CompassContent(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "back to your car",
+                    "back to your spot",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (navState.isGpsWeak) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "GPS signal is weak -- try moving to a more open area",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                if (navState.compassNeedsCalibration) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Compass needs calibration -- wave your phone in a figure-8 motion",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                if (navState.usingGpsHeadingFallback) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "This device has no compass sensor -- direction updates as you walk",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
 

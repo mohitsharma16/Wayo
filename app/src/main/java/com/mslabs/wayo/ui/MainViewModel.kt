@@ -19,8 +19,25 @@ import kotlinx.coroutines.launch
 data class NavigationState(
     val bearing: Float = 0f,
     val heading: Float = 0f,
-    val distanceMeters: Float = 0f
-)
+    val distanceMeters: Float = 0f,
+    // True when this device has no usable orientation sensor and we're
+    // relying on GPS course-over-ground instead.
+    val usingGpsHeadingFallback: Boolean = false,
+    // True when a real magnetometer exists but Android itself flags the
+    // reading as unreliable -- this is when the figure-8 calibration
+    // gesture actually helps.
+    val compassNeedsCalibration: Boolean = false,
+    // Android's own accuracy radius in meters for the current GPS fix.
+    val gpsAccuracyMeters: Float = 0f
+) {
+    val isGpsWeak: Boolean get() = gpsAccuracyMeters > GPS_WEAK_THRESHOLD_METERS
+
+    companion object {
+        // A reasonable default for pedestrian use -- tune if real-world
+        // testing suggests otherwise.
+        const val GPS_WEAK_THRESHOLD_METERS = 30f
+    }
+}
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -39,16 +56,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val isPro: StateFlow<Boolean> = billingManager.isPro
 
-    private val currentHeading = compassSensor.headingFlow()
-    private val currentLocation = locationHelper.locationUpdates()
+    private val sensorHeading = compassSensor.headingFlow()
+    private val locationFlow = locationHelper.locationUpdates()
+
+    // Retained across combine() emissions so the arrow doesn't reset to 0
+    // every time GPS momentarily has no fresh bearing (e.g. briefly
+    // standing still) on devices using the GPS-heading fallback.
+    private var lastGpsHeading: Float = 0f
 
     val navigationState: StateFlow<NavigationState> =
-        combine(activeSpot, currentLocation, currentHeading) { spot, location, heading ->
-            if (spot == null) return@combine NavigationState(heading = heading)
-            val (lat, lng) = location
-            val bearing = BearingUtils.calculateBearing(lat, lng, spot.latitude, spot.longitude)
-            val distance = BearingUtils.distanceMeters(lat, lng, spot.latitude, spot.longitude)
-            NavigationState(bearing = bearing, heading = heading, distanceMeters = distance)
+        combine(activeSpot, locationFlow, sensorHeading) { spot, location, sensorHead ->
+            if (spot == null) return@combine NavigationState()
+
+            val bearing = BearingUtils.calculateBearing(
+                location.latitude, location.longitude, spot.latitude, spot.longitude
+            )
+            val distance = BearingUtils.distanceMeters(
+                location.latitude, location.longitude, spot.latitude, spot.longitude
+            )
+
+            val usingFallback = !compassSensor.hasOrientationSensor
+            val heading = if (usingFallback) {
+                location.bearing?.also { lastGpsHeading = it } ?: lastGpsHeading
+            } else {
+                sensorHead.degrees
+            }
+
+            NavigationState(
+                bearing = bearing,
+                heading = heading,
+                distanceMeters = distance,
+                usingGpsHeadingFallback = usingFallback,
+                compassNeedsCalibration = !usingFallback && !sensorHead.isReliable,
+                gpsAccuracyMeters = location.accuracyMeters
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationState())
 
     init {

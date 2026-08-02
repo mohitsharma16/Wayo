@@ -122,7 +122,7 @@ private fun PaywallContent(modifier: Modifier = Modifier, onUnlock: () -> Unit) 
         }
         Spacer(Modifier.height(20.dp))
         Text(
-            "Unlock parking history, photos, and notes",
+            "Unlock history, photos, and notes",
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center
         )
@@ -162,7 +162,7 @@ private fun EmptyHistory(modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            "Your past parking spots will show up here.",
+            "Your past spots will show up here.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
