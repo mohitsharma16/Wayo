@@ -81,6 +81,7 @@ import com.mslabs.wayo.ui.components.CompassDial
 import com.mslabs.wayo.ui.components.PhotoThumbnail
 import com.mslabs.wayo.util.PhotoUtils
 import java.io.File
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,13 +104,13 @@ fun HomeScreen(
     var hasLocationPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-                PackageManager.PERMISSION_GRANTED
+                    PackageManager.PERMISSION_GRANTED
         )
     }
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                PackageManager.PERMISSION_GRANTED
+                    PackageManager.PERMISSION_GRANTED
         )
     }
 
@@ -310,7 +311,7 @@ private fun PermissionRationale(
         if (!permanentlyDenied) {
             Text(
                 "Wayo needs your location to remember where you left this. " +
-                    "Camera access is optional, for attaching a photo to help you recognize the spot.",
+                        "Camera access is optional, for attaching a photo to help you recognize the spot.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -322,7 +323,7 @@ private fun PermissionRationale(
         } else {
             Text(
                 "Location access was denied. Wayo can't work without it -- " +
-                    "enable it from Settings to continue.",
+                        "enable it from Settings to continue.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -561,7 +562,7 @@ private fun CompassContent(
                     .padding(28.dp)
             ) {
                 if (navState.isArrived) {
-                    ArrivedContent()
+                    ArrivedContent(accuracyMeters = navState.gpsAccuracyMeters)
                 } else {
                     CompassDial(
                         rotationDegrees = arrowRotation,
@@ -579,6 +580,12 @@ private fun CompassContent(
                         "back to your spot",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "±${navState.gpsAccuracyMeters.toInt()}m GPS accuracy",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
                 if (navState.isGpsWeak) {
@@ -641,7 +648,7 @@ private fun CompassContent(
  * the marked spot.
  */
 @Composable
-private fun ArrivedContent() {
+private fun ArrivedContent(accuracyMeters: Float) {
     val infiniteTransition = rememberInfiniteTransition(label = "arrivedPulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -695,9 +702,16 @@ private fun ArrivedContent() {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "GPS is accurate to about ${accuracyMeters.toInt()}m -- look around this area",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        textAlign = TextAlign.Center
+    )
 }
 
 private fun formatDistance(meters: Float): String {
     return if (meters < 1000) "${meters.toInt()}m"
-    else String.format("%.1fkm", meters / 1000)
+    else String.format(Locale.getDefault(), "%.1fkm", meters / 1000)
 }
