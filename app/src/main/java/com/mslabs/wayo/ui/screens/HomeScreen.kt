@@ -2,6 +2,7 @@ package com.mslabs.wayo.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -14,6 +15,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -33,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
@@ -42,6 +46,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -62,8 +67,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mslabs.wayo.ui.MainViewModel
@@ -83,31 +91,47 @@ fun HomeScreen(
     val activeSpot by viewModel.activeSpot.collectAsStateWithLifecycle()
     val navState by viewModel.navigationState.collectAsStateWithLifecycle()
 
-    // --- Location permission state ---
+    val activity = LocalActivity.current
+
+    // --- Combined permission state ---
+    // Both permissions are now explained and requested together, upfront,
+    // instead of location-at-start / camera-only-when-tapped. Location is
+    // required to use the app at all; camera stays optional (denying it
+    // just means no photos, not a blocked app).
     var hasLocationPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
         )
     }
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> hasLocationPermission = granted }
-
-    // --- Camera permission state ---
-    // This was the missing piece that caused the crash: CAMERA is a dangerous
-    // permission and must be requested at runtime, same as location. Declaring
-    // it in the manifest alone is not enough on API 23+.
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                 PackageManager.PERMISSION_GRANTED
         )
     }
+
+    // Tracks the case Android gives no way to recover from via a normal
+    // request: once a permission has been denied and the system will no
+    // longer show the dialog at all (shouldShowRequestPermissionRationale
+    // returns false AFTER a prior denial), the only path forward is the
+    // app's system Settings screen. Without this, tapping "Allow" again
+    // silently does nothing, which is exactly the bug being fixed here.
+    var locationPermanentlyDenied by remember { mutableStateOf(false) }
+    var cameraPermanentlyDenied by remember { mutableStateOf(false) }
+
+    fun openAppSettings() {
+        val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = android.net.Uri.fromParts("package", context.packageName, null)
+        }
+        context.startActivity(intent)
+    }
+
     var launchCameraAfterPermission by remember { mutableStateOf(false) }
 
     var pendingPhotoFile by remember { mutableStateOf<File?>(null) }
     var capturedPhotoPath by remember { mutableStateOf<String?>(null) }
+    var noteText by remember { mutableStateOf("") }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
@@ -117,11 +141,38 @@ fun HomeScreen(
         }
     }
 
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+    // Requests BOTH permissions together -- this is the upfront combined ask.
+    val combinedPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        hasLocationPermission = results[Manifest.permission.ACCESS_FINE_LOCATION] ?: hasLocationPermission
+        hasCameraPermission = results[Manifest.permission.CAMERA] ?: hasCameraPermission
+
+        if (!hasLocationPermission) {
+            locationPermanentlyDenied = activity?.let {
+                !ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.ACCESS_FINE_LOCATION)
+            } ?: false
+        }
+        if (!hasCameraPermission) {
+            cameraPermanentlyDenied = activity?.let {
+                !ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.CAMERA)
+            } ?: false
+        }
+    }
+
+    // Used when camera is requested later on its own (e.g. user granted
+    // location upfront but skipped camera, then taps "Add a photo").
+    val cameraOnlyPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasCameraPermission = granted
-        if (granted) launchCameraAfterPermission = true
+        if (granted) {
+            launchCameraAfterPermission = true
+        } else {
+            cameraPermanentlyDenied = activity?.let {
+                !ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.CAMERA)
+            } ?: false
+        }
     }
 
     fun launchCamera() {
@@ -131,10 +182,10 @@ fun HomeScreen(
     }
 
     fun requestPhoto() {
-        if (hasCameraPermission) {
-            launchCamera()
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        when {
+            hasCameraPermission -> launchCamera()
+            cameraPermanentlyDenied -> openAppSettings()
+            else -> cameraOnlyPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -179,16 +230,28 @@ fun HomeScreen(
                 label = "homeState"
             ) { state ->
                 when (state) {
-                    HomeState.PERMISSION -> PermissionRationale {
-                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                    }
+                    HomeState.PERMISSION -> PermissionRationale(
+                        permanentlyDenied = locationPermanentlyDenied,
+                        onRequestPermission = {
+                            combinedPermissionLauncher.launch(
+                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CAMERA)
+                            )
+                        },
+                        onOpenSettings = { openAppSettings() }
+                    )
                     HomeState.CAPTURE -> CaptureContent(
                         capturedPhotoPath = capturedPhotoPath,
+                        noteText = noteText,
+                        onNoteChange = { noteText = it },
                         onTakePhoto = { requestPhoto() },
                         onRemovePhoto = { capturedPhotoPath = null },
                         onParkHere = {
-                            viewModel.parkHere(photoPath = capturedPhotoPath, note = null)
+                            viewModel.parkHere(
+                                photoPath = capturedPhotoPath,
+                                note = noteText.trim().ifBlank { null }
+                            )
                             capturedPhotoPath = null
+                            noteText = ""
                         }
                     )
                     HomeState.NAVIGATE -> CompassContent(
@@ -205,7 +268,11 @@ fun HomeScreen(
 private enum class HomeState { PERMISSION, CAPTURE, NAVIGATE }
 
 @Composable
-private fun PermissionRationale(onRequestPermission: () -> Unit) {
+private fun PermissionRationale(
+    permanentlyDenied: Boolean,
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(32.dp)
@@ -227,15 +294,31 @@ private fun PermissionRationale(onRequestPermission: () -> Unit) {
             )
         }
         Spacer(Modifier.height(20.dp))
-        Text(
-            "Wayo needs your location to remember where you left this.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(24.dp))
-        FilledTonalButton(onClick = onRequestPermission) {
-            Text("Allow location access", style = MaterialTheme.typography.labelLarge)
+
+        if (!permanentlyDenied) {
+            Text(
+                "Wayo needs your location to remember where you left this. " +
+                    "Camera access is optional, for attaching a photo to help you recognize the spot.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+            FilledTonalButton(onClick = onRequestPermission) {
+                Text("Continue", style = MaterialTheme.typography.labelLarge)
+            }
+        } else {
+            Text(
+                "Location access was denied. Wayo can't work without it -- " +
+                    "enable it from Settings to continue.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+            FilledTonalButton(onClick = onOpenSettings) {
+                Text("Open Settings", style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
@@ -243,13 +326,19 @@ private fun PermissionRationale(onRequestPermission: () -> Unit) {
 @Composable
 private fun CaptureContent(
     capturedPhotoPath: String?,
+    noteText: String,
+    onNoteChange: (String) -> Unit,
     onTakePhoto: () -> Unit,
     onRemovePhoto: () -> Unit,
     onParkHere: () -> Unit
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(32.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp)
     ) {
         Text(
             "Find your way back.",
@@ -257,6 +346,21 @@ private fun CaptureContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = noteText,
+            onValueChange = onNoteChange,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Add a note (optional)") },
+            leadingIcon = {
+                Icon(Icons.Default.Edit, contentDescription = null)
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+            shape = MaterialTheme.shapes.medium
+        )
+        Spacer(Modifier.height(20.dp))
 
         if (capturedPhotoPath != null) {
             Card(
