@@ -3,7 +3,7 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Navy, matching ui/theme/Color.kt's NavyBackground -- the previous
+    <!-- Navy, matching ui/theme/Color.kt's NavyBackground  the previous
          icon used a leftover blue (#3D7EFF) from before the app's palette
          was redesigned, so it no longer matched the in-app brand at all. -->
     <path

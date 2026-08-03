@@ -8,7 +8,7 @@
         (fillType="evenOdd" combines the outer pin path and the inner
         circle in one pass), rendered in the app's actual brand teal
         instead of plain white. This is a deliberately simple, universally
-        recognizable "marked location" glyph -- legible at small launcher
+        recognizable "marked location" glyph legible at small launcher
         sizes, and honest about what the app does (mark a spot, find your
         way back) rather than being car-specific.
     -->

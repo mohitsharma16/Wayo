@@ -5,7 +5,7 @@
     <color name="splash_background">#0A0E13</color>
 
     <!-- Native window background shown for the first frame before Compose
-         takes over -- matched to WayoTheme's actual light/dark background
+         takes over  matched to WayoTheme's actual light/dark background
          colors so there's no flash of a mismatched color on cold start. -->
     <color name="window_background_light">#F6F8F9</color>
     <color name="window_background_dark">#0A0E13</color>

@@ -5,7 +5,7 @@
 
     <!--
         The system splash screen theme. windowSplashScreenAnimatedIcon reuses
-        the adaptive launcher icon's foreground -- per Android's own docs,
+        the adaptive launcher icon's foreground  per Android's own docs,
         pairing an adaptive icon's foreground drawable with a matching
         windowSplashScreenIconBackgroundColor is the recommended way to reuse
         launcher art for the splash screen without a separate duplicate asset.

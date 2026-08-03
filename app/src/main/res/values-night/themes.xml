@@ -3,7 +3,7 @@
         Android automatically picks this file over res/values/themes.xml
         when the system is in dark mode (the "-night" resource qualifier).
         Same style name (Theme.Wayo), different parent/background, so
-        nothing else in the manifest needs to change -- this fixes the
+        nothing else in the manifest needs to change  this fixes the
         light-flash-before-Compose-loads gap without touching AppCompat or
         adding a new dependency.
     -->
