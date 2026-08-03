@@ -39,11 +39,26 @@ class LocationHelper(context: Context) {
     /**
      * Fast last-known-location fetch -- prioritizes speed over precision,
      * since capturing a parking spot quickly matters more than perfect accuracy.
+     *
+     * IMPORTANT: fusedClient.lastLocation is a passive cache read, not an
+     * active request. It returns null whenever there's no cached fix yet --
+     * right after granting location permission for the first time, after a
+     * reboot, or on a fresh install. Silently failing in that case is
+     * exactly what caused "Mark this spot" to do nothing at unpredictable
+     * moments. getCurrentLocation() actively requests a fresh fix instead,
+     * used here only as a fallback so the common case (a cache already
+     * exists) still stays fast.
      */
     @SuppressLint("MissingPermission")
     suspend fun getLastKnownLocation(): Pair<Double, Double>? {
-        val location = fusedClient.lastLocation.await() ?: return null
-        return location.latitude to location.longitude
+        fusedClient.lastLocation.await()?.let {
+            return it.latitude to it.longitude
+        }
+        val freshLocation = fusedClient.getCurrentLocation(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            null
+        ).await()
+        return freshLocation?.let { it.latitude to it.longitude }
     }
 
     /** Continuous location updates for the live compass/distance screen. */

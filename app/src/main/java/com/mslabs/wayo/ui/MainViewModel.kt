@@ -10,9 +10,13 @@ import com.mslabs.wayo.data.ParkingSpot
 import com.mslabs.wayo.location.LocationHelper
 import com.mslabs.wayo.sensor.CompassSensor
 import com.mslabs.wayo.util.BearingUtils
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -28,7 +32,11 @@ data class NavigationState(
     // gesture actually helps.
     val compassNeedsCalibration: Boolean = false,
     // Android's own accuracy radius in meters for the current GPS fix.
-    val gpsAccuracyMeters: Float = 0f
+    val gpsAccuracyMeters: Float = 0f,
+    // True once distance is within GPS's own margin of error -- see the
+    // isArrived companion constant below for why this replaces trying to
+    // show a literal 0m, which GPS alone can't reliably reach.
+    val isArrived: Boolean = false
 ) {
     val isGpsWeak: Boolean get() = gpsAccuracyMeters > GPS_WEAK_THRESHOLD_METERS
 
@@ -36,6 +44,11 @@ data class NavigationState(
         // A reasonable default for pedestrian use -- tune if real-world
         // testing suggests otherwise.
         const val GPS_WEAK_THRESHOLD_METERS = 30f
+
+        // Never require tighter precision than this to declare arrival,
+        // even on an excellent GPS day -- consumer phone GPS realistically
+        // can't do meaningfully better than this outdoors.
+        const val ARRIVAL_FLOOR_METERS = 8f
     }
 }
 
@@ -59,47 +72,85 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val sensorHeading = compassSensor.headingFlow()
     private val locationFlow = locationHelper.locationUpdates()
 
-    // Retained across combine() emissions so the arrow doesn't reset to 0
-    // every time GPS momentarily has no fresh bearing (e.g. briefly
-    // standing still) on devices using the GPS-heading fallback.
-    private var lastGpsHeading: Float = 0f
-
+    /**
+     * Only subscribes to GPS/compass updates while there's actually an
+     * active spot to navigate to. Previously this combined the location
+     * flow unconditionally, so GPS kept running the entire time the app
+     * was open -- including while just sitting on the capture screen with
+     * nothing to navigate to. flatMapLatest on activeSpot means the
+     * location subscription starts only when a spot is marked and stops
+     * immediately (not after a delay) when it's cleared.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
     val navigationState: StateFlow<NavigationState> =
-        combine(activeSpot, locationFlow, sensorHeading) { spot, location, sensorHead ->
-            if (spot == null) return@combine NavigationState()
-
-            val bearing = BearingUtils.calculateBearing(
-                location.latitude, location.longitude, spot.latitude, spot.longitude
-            )
-            val distance = BearingUtils.distanceMeters(
-                location.latitude, location.longitude, spot.latitude, spot.longitude
-            )
-
-            val usingFallback = !compassSensor.hasOrientationSensor
-            val heading = if (usingFallback) {
-                location.bearing?.also { lastGpsHeading = it } ?: lastGpsHeading
+        activeSpot.flatMapLatest { spot ->
+            if (spot == null) {
+                flowOf(NavigationState())
             } else {
-                sensorHead.degrees
-            }
+                // Scoped to this specific "navigating to a spot" session --
+                // resets naturally every time a new spot is marked, so
+                // smoothing from a previous session never leaks into a new one.
+                var smoothedDistance: Float? = null
+                var lastGpsHeading = 0f
 
-            NavigationState(
-                bearing = bearing,
-                heading = heading,
-                distanceMeters = distance,
-                usingGpsHeadingFallback = usingFallback,
-                compassNeedsCalibration = !usingFallback && !sensorHead.isReliable,
-                gpsAccuracyMeters = location.accuracyMeters
-            )
+                combine(locationFlow, sensorHeading) { location, sensorHead ->
+                    val bearing = BearingUtils.calculateBearing(
+                        location.latitude, location.longitude, spot.latitude, spot.longitude
+                    )
+                    val rawDistance = BearingUtils.distanceMeters(
+                        location.latitude, location.longitude, spot.latitude, spot.longitude
+                    )
+
+                    // Low-pass filter on distance, same idea as the existing
+                    // compass heading smoothing -- GPS position noise alone
+                    // makes raw distance visibly jitter even standing still;
+                    // this settles it into a steadier number instead of a
+                    // number that jumps around every 1-2 seconds.
+                    smoothedDistance = smoothedDistance?.let { it + 0.3f * (rawDistance - it) }
+                        ?: rawDistance
+                    val distance = smoothedDistance ?: rawDistance
+
+                    val usingFallback = !compassSensor.hasOrientationSensor
+                    val heading = if (usingFallback) {
+                        location.bearing?.also { lastGpsHeading = it } ?: lastGpsHeading
+                    } else {
+                        sensorHead.degrees
+                    }
+
+                    val arrivalRadius = maxOf(location.accuracyMeters, NavigationState.ARRIVAL_FLOOR_METERS)
+
+                    NavigationState(
+                        bearing = bearing,
+                        heading = heading,
+                        distanceMeters = distance,
+                        usingGpsHeadingFallback = usingFallback,
+                        compassNeedsCalibration = !usingFallback && !sensorHead.isReliable,
+                        gpsAccuracyMeters = location.accuracyMeters,
+                        isArrived = distance <= arrivalRadius
+                    )
+                }
+            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationState())
 
     init {
         billingManager.startConnection()
     }
 
-    fun parkHere(photoPath: String?, note: String?) {
+    private val _isMarkingSpot = MutableStateFlow(false)
+    val isMarkingSpot: StateFlow<Boolean> = _isMarkingSpot
+
+    fun parkHere(photoPath: String?, note: String?, onSuccess: () -> Unit = {}, onFailure: () -> Unit = {}) {
         viewModelScope.launch {
-            val location = locationHelper.getLastKnownLocation() ?: return@launch
+            _isMarkingSpot.value = true
+            val location = locationHelper.getLastKnownLocation()
+            _isMarkingSpot.value = false
+
+            if (location == null) {
+                onFailure()
+                return@launch
+            }
             repository.parkHere(location.first, location.second, photoPath, note)
+            onSuccess()
         }
     }
 

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -90,6 +91,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val activeSpot by viewModel.activeSpot.collectAsStateWithLifecycle()
     val navState by viewModel.navigationState.collectAsStateWithLifecycle()
+    val isMarkingSpot by viewModel.isMarkingSpot.collectAsStateWithLifecycle()
 
     val activity = LocalActivity.current
 
@@ -243,15 +245,25 @@ fun HomeScreen(
                         capturedPhotoPath = capturedPhotoPath,
                         noteText = noteText,
                         onNoteChange = { noteText = it },
+                        isMarkingSpot = isMarkingSpot,
                         onTakePhoto = { requestPhoto() },
                         onRemovePhoto = { capturedPhotoPath = null },
                         onParkHere = {
                             viewModel.parkHere(
                                 photoPath = capturedPhotoPath,
-                                note = noteText.trim().ifBlank { null }
+                                note = noteText.trim().ifBlank { null },
+                                onSuccess = {
+                                    capturedPhotoPath = null
+                                    noteText = ""
+                                },
+                                onFailure = {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Couldn't get your location -- try again",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             )
-                            capturedPhotoPath = null
-                            noteText = ""
                         }
                     )
                     HomeState.NAVIGATE -> CompassContent(
@@ -328,6 +340,7 @@ private fun CaptureContent(
     capturedPhotoPath: String?,
     noteText: String,
     onNoteChange: (String) -> Unit,
+    isMarkingSpot: Boolean,
     onTakePhoto: () -> Unit,
     onRemovePhoto: () -> Unit,
     onParkHere: () -> Unit
@@ -399,7 +412,7 @@ private fun CaptureContent(
             Spacer(Modifier.height(24.dp))
         }
 
-        MarkSpotButton(onClick = onParkHere)
+        MarkSpotButton(isLoading = isMarkingSpot, onClick = onParkHere)
 
         Spacer(Modifier.height(28.dp))
 
@@ -423,7 +436,7 @@ private fun CaptureContent(
  * consistent product instead of a different color choice per screen.
  */
 @Composable
-private fun MarkSpotButton(onClick: () -> Unit) {
+private fun MarkSpotButton(isLoading: Boolean, onClick: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val infiniteTransition = rememberInfiniteTransition(label = "parkPulse")
 
@@ -468,26 +481,35 @@ private fun MarkSpotButton(onClick: () -> Unit) {
                 .background(MaterialTheme.colorScheme.primary, CircleShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = null
+                    indication = null,
+                    enabled = !isLoading
                 ) {
                     haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                     onClick()
                 },
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.LocationOn,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(36.dp)
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Mark this spot",
+            if (isLoading) {
+                CircularProgressIndicator(
                     color = MaterialTheme.colorScheme.onPrimary,
-                    style = MaterialTheme.typography.titleMedium
+                    modifier = Modifier.size(36.dp),
+                    strokeWidth = 3.dp
                 )
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Mark this spot",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
             }
         }
     }
@@ -501,6 +523,18 @@ private fun CompassContent(
 ) {
     val haptics = LocalHapticFeedback.current
     val arrowRotation = (navState.bearing - navState.heading + 360) % 360
+
+    // Fire a haptic once, right when we cross into "arrived" -- not on
+    // every recomposition while already arrived.
+    var hasFiredArrivalHaptic by remember { mutableStateOf(false) }
+    LaunchedEffect(navState.isArrived) {
+        if (navState.isArrived && !hasFiredArrivalHaptic) {
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            hasFiredArrivalHaptic = true
+        } else if (!navState.isArrived) {
+            hasFiredArrivalHaptic = false
+        }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -526,23 +560,27 @@ private fun CompassContent(
                     .fillMaxWidth()
                     .padding(28.dp)
             ) {
-                CompassDial(
-                    rotationDegrees = arrowRotation,
-                    modifier = Modifier.size(200.dp)
-                )
+                if (navState.isArrived) {
+                    ArrivedContent()
+                } else {
+                    CompassDial(
+                        rotationDegrees = arrowRotation,
+                        modifier = Modifier.size(200.dp)
+                    )
 
-                Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(20.dp))
 
-                Text(
-                    formatDistance(navState.distanceMeters),
-                    style = MaterialTheme.typography.displayMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "back to your spot",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    Text(
+                        formatDistance(navState.distanceMeters),
+                        style = MaterialTheme.typography.displayMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "back to your spot",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (navState.isGpsWeak) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -561,7 +599,7 @@ private fun CompassContent(
                         textAlign = TextAlign.Center
                     )
                 }
-                if (navState.usingGpsHeadingFallback) {
+                if (navState.usingGpsHeadingFallback && !navState.isArrived) {
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "This device has no compass sensor -- direction updates as you walk",
@@ -593,6 +631,70 @@ private fun CompassContent(
             Text("Found it", style = MaterialTheme.typography.labelLarge)
         }
     }
+}
+
+/**
+ * Shown once distance settles within GPS's own margin of error. Rather than
+ * showing a small number that jitters forever and never quite reaches "0m"
+ * (a real limitation of phone GPS, not a bug), this is an honest, clear
+ * signal: you're close enough that GPS itself can't tell you apart from
+ * the marked spot.
+ */
+@Composable
+private fun ArrivedContent() {
+    val infiniteTransition = rememberInfiniteTransition(label = "arrivedPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "arrivedPulseScale"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(200.dp)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(140.dp)
+                .scale(pulseScale)
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(44.dp)
+            )
+        }
+    }
+
+    Spacer(Modifier.height(20.dp))
+
+    Text(
+        "You're here",
+        style = MaterialTheme.typography.displayMedium,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+    Text(
+        "Within reach of your marked spot",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 private fun formatDistance(meters: Float): String {

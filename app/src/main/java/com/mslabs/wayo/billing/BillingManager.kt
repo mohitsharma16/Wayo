@@ -21,14 +21,29 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * IMPORTANT: create a managed (one-time) product in Play Console with this
  * exact product ID before the purchase flow will work.
+ *
+ * Caching strategy: the unlock state is cached in SharedPreferences so the
+ * UI can show the correct state instantly on launch instead of defaulting
+ * to "locked" for the brief moment before Play Billing responds. This is
+ * a cache for speed, not a replacement for the real check -- Play Billing
+ * is still queried on every launch and the cache is corrected if it's
+ * wrong. Trusting a local flag forever would mean a refunded or charged-
+ * back purchase could never be re-locked, and a purchase restored on a
+ * new device would never be picked up.
  */
 class BillingManager(private val context: Context) {
 
     companion object {
         const val PRODUCT_ID = "unlock_full_access"
+        private const val PREFS_NAME = "wayo_billing"
+        private const val KEY_IS_PRO = "is_pro"
     }
 
-    private val _isPro = MutableStateFlow(false)
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    // Seeded from the cache immediately so the UI never has to show a
+    // false "locked" flash while the real Play Billing query is in flight.
+    private val _isPro = MutableStateFlow(prefs.getBoolean(KEY_IS_PRO, false))
     val isPro: StateFlow<Boolean> = _isPro
 
     private var productDetails: ProductDetails? = null
@@ -58,6 +73,9 @@ class BillingManager(private val context: Context) {
 
             override fun onBillingServiceDisconnected() {
                 // Play Billing recommends retrying with backoff; add if needed.
+                // Note: the cached flag from SharedPreferences still holds
+                // during any disconnected period, so the user isn't
+                // incorrectly locked out just because this connection blipped.
             }
         })
     }
@@ -101,7 +119,7 @@ class BillingManager(private val context: Context) {
                 it.products.contains(PRODUCT_ID) &&
                     it.purchaseState == Purchase.PurchaseState.PURCHASED
             }
-            _isPro.value = unlocked
+            setIsPro(unlocked)
         }
     }
 
@@ -114,8 +132,14 @@ class BillingManager(private val context: Context) {
                 billingClient.acknowledgePurchase(ackParams) {}
             }
             if (purchase.products.contains(PRODUCT_ID)) {
-                _isPro.value = true
+                setIsPro(true)
             }
         }
+    }
+
+    /** Updates in-memory state and persists it, in one place, so the two never drift apart. */
+    private fun setIsPro(value: Boolean) {
+        _isPro.value = value
+        prefs.edit().putBoolean(KEY_IS_PRO, value).apply()
     }
 }
