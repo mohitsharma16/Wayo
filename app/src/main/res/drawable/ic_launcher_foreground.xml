@@ -3,7 +3,17 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!--
+        A classic map-pin silhouette with a punched-out circular hole
+        (fillType="evenOdd" combines the outer pin path and the inner
+        circle in one pass), rendered in the app's actual brand teal
+        instead of plain white. This is a deliberately simple, universally
+        recognizable "marked location" glyph -- legible at small launcher
+        sizes, and honest about what the app does (mark a spot, find your
+        way back) rather than being car-specific.
+    -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,24c-11.6,0 -21,9.4 -21,21c0,15.75 21,39 21,39s21,-23.25 21,-39C75,33.4 65.6,24 54,24zM54,52c-3.87,0 -7,-3.13 -7,-7s3.13,-7 7,-7 7,3.13 7,7 -3.13,7 -7,7z" />
+        android:fillColor="#00E6C3"
+        android:fillType="evenOdd"
+        android:pathData="M54,20 C39.09,20 27,32.09 27,47 C27,66.5 54,90 54,90 C54,90 81,66.5 81,47 C81,32.09 68.91,20 54,20 Z M54,58 C47.92,58 43,53.08 43,47 C43,40.92 47.92,36 54,36 C60.08,36 65,40.92 65,47 C65,53.08 60.08,58 54,58 Z" />
 </vector>

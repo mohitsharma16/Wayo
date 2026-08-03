@@ -1,3 +1,21 @@
 <resources>
-    <style name="Theme.Wayo" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Wayo" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background_light</item>
+    </style>
+
+    <!--
+        The system splash screen theme. windowSplashScreenAnimatedIcon reuses
+        the adaptive launcher icon's foreground -- per Android's own docs,
+        pairing an adaptive icon's foreground drawable with a matching
+        windowSplashScreenIconBackgroundColor is the recommended way to reuse
+        launcher art for the splash screen without a separate duplicate asset.
+        postSplashScreenTheme hands off to the real app theme once the
+        splash screen is dismissed.
+    -->
+    <style name="Theme.Wayo.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.Wayo</item>
+    </style>
 </resources>
