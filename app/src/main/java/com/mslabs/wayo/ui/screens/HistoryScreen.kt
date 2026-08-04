@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mslabs.wayo.BuildConfig
 import com.mslabs.wayo.data.ParkingSpot
 import com.mslabs.wayo.ui.MainViewModel
 import com.mslabs.wayo.ui.components.PhotoThumbnail
@@ -99,6 +100,17 @@ fun HistoryScreen(
                 actions = {
                     ThemeToggleButton(isDarkTheme = isDarkTheme, onToggle = { viewModel.toggleTheme() })
                 }
+            )
+        },
+        bottomBar = {
+            Text(
+                "Wayo ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
             )
         },
         containerColor = MaterialTheme.colorScheme.background
