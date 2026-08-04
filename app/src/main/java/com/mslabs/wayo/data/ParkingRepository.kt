@@ -40,4 +40,8 @@ class ParkingRepository(private val dao: ParkingSpotDao) {
             dao.deleteActiveSpots()
         }
     }
+
+    suspend fun deleteFromHistory(spot: ParkingSpot) {
+        dao.delete(spot)
+    }
 }

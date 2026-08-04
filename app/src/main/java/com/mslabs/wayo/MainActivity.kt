@@ -5,7 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
@@ -31,7 +33,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            WayoTheme {
+            val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
+
+            WayoTheme(darkTheme = isDarkTheme) {
                 // Navigation 3: a plain, saveable back stack you own directly.
                 val backStack = rememberNavBackStack(Home)
 

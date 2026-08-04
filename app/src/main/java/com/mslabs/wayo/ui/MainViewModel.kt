@@ -1,7 +1,10 @@
 package com.mslabs.wayo.ui
 
 import android.app.Application
+import android.content.Context
+import android.content.res.Configuration
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.application
 import androidx.lifecycle.viewModelScope
 import com.mslabs.wayo.billing.BillingManager
 import com.mslabs.wayo.data.AppDatabase
@@ -72,6 +75,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val isPro: StateFlow<Boolean> = billingManager.isPro
+
+    private val themePrefs = application.getSharedPreferences(THEME_PREFS_NAME, Context.MODE_PRIVATE)
+
+    private fun systemDarkTheme(): Boolean {
+        val uiMode = application.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return uiMode == Configuration.UI_MODE_NIGHT_YES
+    }
+
+    // Starts matching the system setting on first launch, same as before --
+    // but once the user taps the light/dark toggle, their explicit choice
+    // is persisted and wins from then on, regardless of what the system
+    // theme does afterward.
+    private val _isDarkTheme = MutableStateFlow(
+        if (themePrefs.contains(KEY_DARK_THEME)) themePrefs.getBoolean(KEY_DARK_THEME, false)
+        else systemDarkTheme()
+    )
+    val isDarkTheme: StateFlow<Boolean> = _isDarkTheme
+
+    fun toggleTheme() {
+        val newValue = !_isDarkTheme.value
+        _isDarkTheme.value = newValue
+        themePrefs.edit().putBoolean(KEY_DARK_THEME, newValue).apply()
+    }
 
     private val sensorHeading = compassSensor.headingFlow()
     private val locationFlow = locationHelper.locationUpdates()
@@ -183,5 +209,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.foundCar(keepInHistory = isPro.value)
         }
+    }
+
+    fun deleteFromHistory(spot: ParkingSpot) {
+        viewModelScope.launch {
+            repository.deleteFromHistory(spot)
+        }
+    }
+
+    companion object {
+        private const val THEME_PREFS_NAME = "wayo_theme"
+        private const val KEY_DARK_THEME = "is_dark_theme"
     }
 }

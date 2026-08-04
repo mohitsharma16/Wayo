@@ -19,6 +19,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
@@ -33,10 +36,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -46,7 +52,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mslabs.wayo.data.ParkingSpot
 import com.mslabs.wayo.ui.MainViewModel
 import com.mslabs.wayo.ui.components.PhotoThumbnail
+import com.mslabs.wayo.ui.components.ThemeToggleButton
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -57,10 +65,26 @@ fun HistoryScreen(
     onBack: () -> Unit
 ) {
     val isPro by viewModel.isPro.collectAsStateWithLifecycle()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
+
+    // One-time celebratory confirmation right when a purchase actually
+    // completes -- otherwise the only signal the user gets that their
+    // payment went through is the paywall silently swapping to the
+    // unlocked view, which doesn't feel like a purchase was acknowledged.
+    LaunchedEffect(Unit) {
+        viewModel.billingManager.purchaseCompleted.collect {
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            android.widget.Toast.makeText(
+                context,
+                "Full access unlocked -- thank you!",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -71,36 +95,51 @@ fun HistoryScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    ThemeToggleButton(isDarkTheme = isDarkTheme, onToggle = { viewModel.toggleTheme() })
                 }
             )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        when {
-            !isPro -> PaywallContent(
-                modifier = Modifier.padding(padding),
-                onUnlock = {
-                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                    val launched = activity?.let { viewModel.billingManager.launchPurchase(it) } ?: false
-                    if (!launched) {
-                        android.widget.Toast.makeText(
-                            context,
-                            "Store isn't ready yet -- try again in a moment",
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                            MaterialTheme.colorScheme.background
+                        ),
+                        radius = 1200f
+                    )
+                )
+                .padding(padding)
+        ) {
+            when {
+                !isPro -> PaywallContent(
+                    onUnlock = {
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        val launched = activity?.let { viewModel.billingManager.launchPurchase(it) } ?: false
+                        if (!launched) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Store isn't ready yet -- try again in a moment",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     }
-                }
-            )
-            history.isEmpty() -> EmptyHistory(modifier = Modifier.padding(padding))
-            else -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                items(history, key = { it.id }) { spot ->
-                    HistoryRow(spot)
+                )
+                history.isEmpty() -> EmptyHistory()
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(history, key = { it.id }) { spot ->
+                        HistoryRow(spot, onDelete = { viewModel.deleteFromHistory(spot) })
+                    }
                 }
             }
         }
@@ -142,10 +181,43 @@ private fun PaywallContent(modifier: Modifier = Modifier, onUnlock: () -> Unit) 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            FeatureChip(icon = Icons.Default.History, label = "History")
+            FeatureChip(icon = Icons.Default.Camera, label = "Photos")
+            FeatureChip(icon = Icons.Default.Edit, label = "Notes")
+        }
+
+        Spacer(Modifier.height(28.dp))
         Button(onClick = onUnlock) {
             Text("Unlock full access", style = MaterialTheme.typography.labelLarge)
         }
+    }
+}
+
+@Composable
+private fun FeatureChip(icon: ImageVector, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -180,7 +252,7 @@ private fun EmptyHistory(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun HistoryRow(spot: ParkingSpot) {
+private fun HistoryRow(spot: ParkingSpot, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -192,7 +264,9 @@ private fun HistoryRow(spot: ParkingSpot) {
         ) {
             val photoPath = spot.photoPath
             if (photoPath != null) {
-                PhotoThumbnail(photoPath, size = 56.dp)
+                Card(shape = MaterialTheme.shapes.medium) {
+                    PhotoThumbnail(photoPath, size = 56.dp)
+                }
             } else {
                 Box(
                     modifier = Modifier
@@ -209,7 +283,7 @@ private fun HistoryRow(spot: ParkingSpot) {
                 }
             }
             Spacer(Modifier.width(16.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     formatTimestamp(spot.timestamp),
                     style = MaterialTheme.typography.titleMedium
@@ -223,11 +297,34 @@ private fun HistoryRow(spot: ParkingSpot) {
                     )
                 }
             }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete spot",
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                )
+            }
         }
     }
 }
 
 private fun formatTimestamp(millis: Long): String {
-    val formatter = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-    return formatter.format(Date(millis))
+    val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(millis))
+    val now = Calendar.getInstance()
+    val target = Calendar.getInstance().apply { timeInMillis = millis }
+
+    if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
+        now.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
+    ) {
+        return "Today, $time"
+    }
+
+    now.add(Calendar.DAY_OF_YEAR, -1)
+    if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
+        now.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
+    ) {
+        return "Yesterday, $time"
+    }
+
+    return SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(millis))
 }

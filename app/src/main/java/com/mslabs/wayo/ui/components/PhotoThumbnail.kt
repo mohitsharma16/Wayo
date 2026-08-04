@@ -1,6 +1,5 @@
 package com.mslabs.wayo.ui.components
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
@@ -18,10 +17,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import com.mslabs.wayo.util.PhotoUtils
 
 @Composable
 fun PhotoThumbnail(path: String, size: androidx.compose.ui.unit.Dp = 120.dp) {
-    val bitmap = remember(path) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
+    val bitmap = remember(path) { PhotoUtils.decodeRotatedBitmap(path)?.asImageBitmap() }
     if (bitmap != null) {
         Image(
             bitmap = bitmap,

@@ -13,8 +13,11 @@ import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Wraps Google Play Billing for the single one-time "full unlock" product.
@@ -45,6 +48,13 @@ class BillingManager(private val context: Context) {
     // false "locked" flash while the real Play Billing query is in flight.
     private val _isPro = MutableStateFlow(prefs.getBoolean(KEY_IS_PRO, false))
     val isPro: StateFlow<Boolean> = _isPro
+
+    // Fires only for a real-time purchase completion (handlePurchase, below)
+    // -- never for the ownership sync that runs on every app launch -- so
+    // the UI can show a one-time "unlocked!" moment without re-showing it
+    // every time an already-Pro user reopens the app.
+    private val _purchaseCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val purchaseCompleted: SharedFlow<Unit> = _purchaseCompleted.asSharedFlow()
 
     private var productDetails: ProductDetails? = null
 
@@ -141,7 +151,11 @@ class BillingManager(private val context: Context) {
                 billingClient.acknowledgePurchase(ackParams) {}
             }
             if (purchase.products.contains(PRODUCT_ID)) {
+                val wasAlreadyPro = _isPro.value
                 setIsPro(true)
+                if (!wasAlreadyPro) {
+                    _purchaseCompleted.tryEmit(Unit)
+                }
             }
         }
     }

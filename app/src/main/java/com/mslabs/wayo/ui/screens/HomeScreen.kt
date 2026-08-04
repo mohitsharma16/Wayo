@@ -65,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -83,7 +84,10 @@ import com.mslabs.wayo.ui.MainViewModel
 import com.mslabs.wayo.ui.NavigationState
 import com.mslabs.wayo.ui.components.CompassDial
 import com.mslabs.wayo.ui.components.PhotoThumbnail
+import com.mslabs.wayo.ui.components.ProBadge
+import com.mslabs.wayo.ui.components.ThemeToggleButton
 import com.mslabs.wayo.util.PhotoUtils
+import com.mslabs.wayo.util.VibrationUtils
 import java.io.File
 import java.util.Locale
 
@@ -97,6 +101,8 @@ fun HomeScreen(
     val activeSpot by viewModel.activeSpot.collectAsStateWithLifecycle()
     val navState by viewModel.navigationState.collectAsStateWithLifecycle()
     val isMarkingSpot by viewModel.isMarkingSpot.collectAsStateWithLifecycle()
+    val isPro by viewModel.isPro.collectAsStateWithLifecycle()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
 
     val activity = LocalActivity.current
 
@@ -237,6 +243,11 @@ fun HomeScreen(
                     containerColor = Color.Transparent
                 ),
                 actions = {
+                    if (isPro) {
+                        ProBadge()
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    ThemeToggleButton(isDarkTheme = isDarkTheme, onToggle = { viewModel.toggleTheme() })
                     IconButton(onClick = onOpenHistory) {
                         Icon(Icons.Default.History, contentDescription = "History")
                     }
@@ -248,6 +259,20 @@ fun HomeScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                // A very soft radial wash of the brand color behind the
+                // content, instead of a single flat background color for
+                // the whole screen -- the same trick AirTag/Find My-style
+                // finder apps use so the screen reads as "crafted" rather
+                // than a plain list-app background.
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
+                            MaterialTheme.colorScheme.background
+                        ),
+                        radius = 1200f
+                    )
+                )
                 .padding(padding),
             contentAlignment = Alignment.Center
         ) {
@@ -380,78 +405,119 @@ private fun CaptureContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(32.dp)
+            .padding(horizontal = 32.dp, vertical = 16.dp)
     ) {
-        Text(
-            "Find your way back.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(24.dp))
-
-        OutlinedTextField(
-            value = noteText,
-            onValueChange = onNoteChange,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Add a note (optional)") },
-            leadingIcon = {
-                Icon(Icons.Default.Edit, contentDescription = null)
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
-            shape = MaterialTheme.shapes.medium
-        )
-        Spacer(Modifier.height(20.dp))
-
-        if (capturedPhotoPath != null) {
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+        // A small branded hero instead of dropping straight into a form --
+        // gives the first screen a focal point and some presence, instead
+        // of starting cold with a text field.
+        Box(
+            modifier = Modifier
+                .size(84.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0f)
+                        )
+                    )
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Card(shape = MaterialTheme.shapes.medium) {
-                        PhotoThumbnail(capturedPhotoPath, size = 72.dp)
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.LocationOn,
+                contentDescription = null,
+                modifier = Modifier.size(38.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+
+        Text(
+            "Never lose your spot",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Mark where you parked and Wayo will guide you straight back to it.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(32.dp))
+
+        Card(
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = onNoteChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Add a note (optional)") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Edit, contentDescription = null)
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+                    shape = MaterialTheme.shapes.medium
+                )
+
+                if (capturedPhotoPath != null) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Card(shape = MaterialTheme.shapes.medium) {
+                            PhotoThumbnail(capturedPhotoPath, size = 60.dp)
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Photo attached", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Helps you recognize the spot later",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = onRemovePhoto) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove photo",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text("Photo attached", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Helps you recognize the spot later",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = onRemovePhoto) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Remove photo",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                } else {
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(onClick = onTakePhoto, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Camera, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add a photo (optional)", style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
-            Spacer(Modifier.height(24.dp))
         }
+
+        Spacer(Modifier.height(36.dp))
 
         MarkSpotButton(isLoading = isMarkingSpot, onClick = onParkHere)
 
-        Spacer(Modifier.height(28.dp))
-
-        TextButton(onClick = onTakePhoto) {
-            Icon(Icons.Default.Camera, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                if (capturedPhotoPath == null) "Add a photo (optional)" else "Retake photo",
-                style = MaterialTheme.typography.labelLarge
-            )
+        if (capturedPhotoPath != null) {
+            Spacer(Modifier.height(24.dp))
+            TextButton(onClick = onTakePhoto) {
+                Icon(Icons.Default.Camera, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Retake photo", style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
@@ -550,15 +616,18 @@ private fun CompassContent(
     photoPath: String?,
     onFoundIt: () -> Unit
 ) {
+    val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val arrowRotation = (navState.bearing - navState.heading + 360) % 360
 
-    // Fire a haptic once, right when we cross into "arrived" -- not on
-    // every recomposition while already arrived.
+    // Fire once, right when we cross into "arrived" -- not on every
+    // recomposition while already arrived. A distinct double-pulse
+    // vibration rather than the generic tap-click haptic used elsewhere,
+    // since this is the one moment in the app worth calling out specially.
     var hasFiredArrivalHaptic by remember { mutableStateOf(false) }
     LaunchedEffect(navState.isArrived) {
         if (navState.isArrived && !hasFiredArrivalHaptic) {
-            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            VibrationUtils.vibrateArrivalSuccess(context)
             hasFiredArrivalHaptic = true
         } else if (!navState.isArrived) {
             hasFiredArrivalHaptic = false
@@ -576,6 +645,7 @@ private fun CompassContent(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
