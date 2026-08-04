@@ -10,6 +10,7 @@ class ParkingRepository(private val dao: ParkingSpotDao) {
     suspend fun parkHere(
         latitude: Double,
         longitude: Double,
+        captureAccuracyMeters: Float,
         photoPath: String?,
         note: String?
     ) {
@@ -20,6 +21,7 @@ class ParkingRepository(private val dao: ParkingSpotDao) {
                 latitude = latitude,
                 longitude = longitude,
                 timestamp = System.currentTimeMillis(),
+                captureAccuracyMeters = captureAccuracyMeters,
                 photoPath = photoPath,
                 note = note,
                 isActive = true

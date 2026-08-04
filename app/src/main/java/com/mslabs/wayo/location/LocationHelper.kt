@@ -12,7 +12,10 @@ import com.google.android.gms.location.Priority
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * A location fix plus GPS-derived course-over-ground bearing, when available.
@@ -36,29 +39,56 @@ class LocationHelper(context: Context) {
 
     private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
 
+    companion object {
+        // Don't settle for a fix worse than this without at least trying
+        // for something better first.
+        private const val GOOD_ENOUGH_ACCURACY_METERS = 15f
+        private const val CAPTURE_TIMEOUT_MILLIS = 6000L
+    }
+
     /**
-     * Fast last-known-location fetch -- prioritizes speed over precision,
-     * since capturing a parking spot quickly matters more than perfect accuracy.
+     * Used when marking a spot. This used to just grab whatever fix was
+     * fastest (a single lastLocation cache read, or a single
+     * getCurrentLocation call) -- but neither guarantees a GPS-quality fix.
+     * Android can hand back a fast, rough network/cell-tower estimate
+     * (20m+ error) instead of waiting for GPS to lock in, especially right
+     * after the location subsystem wakes up. That silently poisons the
+     * saved spot's coordinates: live tracking can be accurate afterward,
+     * but every distance reading is then measured against a bad anchor
+     * point, which looks exactly like "the distance is wrong" even though
+     * live GPS is working fine.
      *
-     * IMPORTANT: fusedClient.lastLocation is a passive cache read, not an
-     * active request. It returns null whenever there's no cached fix yet --
-     * right after granting location permission for the first time, after a
-     * reboot, or on a fresh install. Silently failing in that case is
-     * exactly what caused "Mark this spot" to do nothing at unpredictable
-     * moments. getCurrentLocation() actively requests a fresh fix instead,
-     * used here only as a fallback so the common case (a cache already
-     * exists) still stays fast.
+     * This instead watches a short burst of live updates (same stream the
+     * compass screen uses) for up to [CAPTURE_TIMEOUT_MILLIS], and takes
+     * the best (lowest accuracy value) one seen -- preferring one at or
+     * under [GOOD_ENOUGH_ACCURACY_METERS] if it arrives in time.
      */
     @SuppressLint("MissingPermission")
-    suspend fun getLastKnownLocation(): Pair<Double, Double>? {
-        fusedClient.lastLocation.await()?.let {
-            return it.latitude to it.longitude
+    suspend fun captureAccurateLocation(): LocationUpdate? {
+        var best: LocationUpdate? = null
+
+        val goodFix = withTimeoutOrNull(CAPTURE_TIMEOUT_MILLIS.milliseconds) {
+            locationUpdates().first { update ->
+                if (best == null || update.accuracyMeters < best!!.accuracyMeters) {
+                    best = update
+                }
+                update.accuracyMeters <= GOOD_ENOUGH_ACCURACY_METERS
+            }
         }
-        val freshLocation = fusedClient.getCurrentLocation(
-            Priority.PRIORITY_HIGH_ACCURACY,
-            null
-        ).await()
-        return freshLocation?.let { it.latitude to it.longitude }
+
+        if (goodFix != null) return goodFix
+        if (best != null) return best
+
+        // Extremely rare fallback: no live update arrived at all within the
+        // timeout window. Fall back to a cache read / one-shot request so
+        // "Mark this spot" still doesn't silently do nothing.
+        fusedClient.lastLocation.await()?.let {
+            return LocationUpdate(it.latitude, it.longitude, if (it.hasBearing()) it.bearing else null, it.accuracy)
+        }
+        val fresh = fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
+        return fresh?.let {
+            LocationUpdate(it.latitude, it.longitude, if (it.hasBearing()) it.bearing else null, it.accuracy)
+        }
     }
 
     /** Continuous location updates for the live compass/distance screen. */

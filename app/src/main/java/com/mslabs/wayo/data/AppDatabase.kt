@@ -18,7 +18,14 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "wayo.db"
-                ).build().also { INSTANCE = it }
+                )
+                    // The schema just gained a new column (captureAccuracyMeters).
+                    // Pre-launch, with no real users' data to preserve, wiping
+                    // local data on a schema change is the pragmatic choice
+                    // over writing a real Migration. Replace with a proper
+                    // Migration before shipping if that matters by then.
+                    .fallbackToDestructiveMigration()
+                    .build().also { INSTANCE = it }
             }
         }
     }

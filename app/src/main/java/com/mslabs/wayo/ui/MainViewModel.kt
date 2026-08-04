@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.math.sqrt
 
 data class NavigationState(
     val bearing: Float = 0f,
@@ -31,11 +32,14 @@ data class NavigationState(
     // reading as unreliable -- this is when the figure-8 calibration
     // gesture actually helps.
     val compassNeedsCalibration: Boolean = false,
-    // Android's own accuracy radius in meters for the current GPS fix.
+    // Android's own accuracy radius in meters for the CURRENT live GPS fix.
     val gpsAccuracyMeters: Float = 0f,
-    // True once distance is within GPS's own margin of error -- see the
-    // isArrived companion constant below for why this replaces trying to
-    // show a literal 0m, which GPS alone can't reliably reach.
+    // The actual threshold used to decide "arrived" -- combines live
+    // accuracy AND the accuracy the spot was originally captured with (see
+    // arrivalRadius calculation below). Shown in the UI so the displayed
+    // number always matches what the app is actually using, instead of
+    // only showing live accuracy and using a different number internally.
+    val arrivalRadiusMeters: Float = NavigationState.ARRIVAL_FLOOR_METERS,
     val isArrived: Boolean = false
 ) {
     val isGpsWeak: Boolean get() = gpsAccuracyMeters > GPS_WEAK_THRESHOLD_METERS
@@ -117,7 +121,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         sensorHead.degrees
                     }
 
-                    val arrivalRadius = maxOf(location.accuracyMeters, NavigationState.ARRIVAL_FLOOR_METERS)
+                    // Combine BOTH sources of uncertainty via quadrature (the
+                    // statistically correct way to combine two independent
+                    // error estimates), not just the live reading. A spot
+                    // captured with poor accuracy stays "hard to fully
+                    // arrive at" even once live GPS is excellent -- which is
+                    // honest, since the anchor point itself carries that
+                    // uncertainty forever.
+                    val combinedUncertainty = sqrt(
+                        location.accuracyMeters * location.accuracyMeters +
+                                spot.captureAccuracyMeters * spot.captureAccuracyMeters
+                    )
+                    val arrivalRadius = maxOf(combinedUncertainty, NavigationState.ARRIVAL_FLOOR_METERS)
 
                     NavigationState(
                         bearing = bearing,
@@ -126,6 +141,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         usingGpsHeadingFallback = usingFallback,
                         compassNeedsCalibration = !usingFallback && !sensorHead.isReliable,
                         gpsAccuracyMeters = location.accuracyMeters,
+                        arrivalRadiusMeters = arrivalRadius,
                         isArrived = distance <= arrivalRadius
                     )
                 }
@@ -142,14 +158,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun parkHere(photoPath: String?, note: String?, onSuccess: () -> Unit = {}, onFailure: () -> Unit = {}) {
         viewModelScope.launch {
             _isMarkingSpot.value = true
-            val location = locationHelper.getLastKnownLocation()
+            // captureAccurateLocation() actively waits for a good fix
+            // instead of grabbing whatever's fastest -- see LocationHelper
+            // for why that mattered here specifically.
+            val location = locationHelper.captureAccurateLocation()
             _isMarkingSpot.value = false
 
             if (location == null) {
                 onFailure()
                 return@launch
             }
-            repository.parkHere(location.first, location.second, photoPath, note)
+            repository.parkHere(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                captureAccuracyMeters = location.accuracyMeters,
+                photoPath = photoPath,
+                note = note
+            )
             onSuccess()
         }
     }
