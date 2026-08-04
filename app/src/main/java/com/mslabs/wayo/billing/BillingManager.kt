@@ -95,8 +95,16 @@ class BillingManager(private val context: Context) {
         }
     }
 
-    fun launchPurchase(activity: Activity) {
-        val details = productDetails ?: return
+    /**
+     * Returns false (and launches nothing) if the product details haven't
+     * loaded yet -- e.g. the billing connection is still in flight, there's
+     * no network right now, or (during development) the product ID isn't
+     * set up in Play Console yet. Without this, tapping "Unlock full
+     * access" in that state did nothing at all, with no feedback that
+     * anything had gone wrong.
+     */
+    fun launchPurchase(activity: Activity): Boolean {
+        val details = productDetails ?: return false
 
         val productDetailsParams = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
@@ -107,6 +115,7 @@ class BillingManager(private val context: Context) {
             .build()
 
         billingClient.launchBillingFlow(activity, flowParams)
+        return true
     }
 
     fun queryExistingPurchases() {

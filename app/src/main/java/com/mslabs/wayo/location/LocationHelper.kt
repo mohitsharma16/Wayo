@@ -9,6 +9,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -67,27 +68,51 @@ class LocationHelper(context: Context) {
     suspend fun captureAccurateLocation(): LocationUpdate? {
         var best: LocationUpdate? = null
 
-        val goodFix = withTimeoutOrNull(CAPTURE_TIMEOUT_MILLIS.milliseconds) {
-            locationUpdates().first { update ->
-                if (best == null || update.accuracyMeters < best!!.accuracyMeters) {
-                    best = update
+        // Play Services throws (rather than just returning null) when
+        // location is unavailable at the platform level -- e.g. the user's
+        // System Settings > Location toggle is off entirely, not just a
+        // denied app permission. That's a completely normal state for a
+        // real user to be in when tapping "Mark this spot", so every call
+        // here is guarded: a thrown exception is treated the same as "no
+        // fix available" (return null -> caller shows a retry toast)
+        // instead of crashing the app.
+        return try {
+            val goodFix = withTimeoutOrNull(CAPTURE_TIMEOUT_MILLIS.milliseconds) {
+                locationUpdates().first { update ->
+                    if (best == null || update.accuracyMeters < best!!.accuracyMeters) {
+                        best = update
+                    }
+                    update.accuracyMeters <= GOOD_ENOUGH_ACCURACY_METERS
                 }
-                update.accuracyMeters <= GOOD_ENOUGH_ACCURACY_METERS
             }
-        }
 
-        if (goodFix != null) return goodFix
-        if (best != null) return best
+            if (goodFix != null) return goodFix
+            if (best != null) return best
 
-        // Extremely rare fallback: no live update arrived at all within the
-        // timeout window. Fall back to a cache read / one-shot request so
-        // "Mark this spot" still doesn't silently do nothing.
-        fusedClient.lastLocation.await()?.let {
-            return LocationUpdate(it.latitude, it.longitude, if (it.hasBearing()) it.bearing else null, it.accuracy)
-        }
-        val fresh = fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
-        return fresh?.let {
-            LocationUpdate(it.latitude, it.longitude, if (it.hasBearing()) it.bearing else null, it.accuracy)
+            // Extremely rare fallback: no live update arrived at all within
+            // the timeout window. Fall back to a cache read / one-shot
+            // request so "Mark this spot" still doesn't silently do
+            // nothing. Both are timeout-bounded -- getCurrentLocation() in
+            // particular has no built-in timeout of its own and can hang
+            // indefinitely on a device that never gets a fix (e.g. deep
+            // indoors), which would otherwise leave the button's loading
+            // spinner stuck forever.
+            withTimeoutOrNull(CAPTURE_TIMEOUT_MILLIS.milliseconds) {
+                fusedClient.lastLocation.await()?.let {
+                    return@withTimeoutOrNull LocationUpdate(
+                        it.latitude, it.longitude, if (it.hasBearing()) it.bearing else null, it.accuracy
+                    )
+                }
+                val fresh = fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
+                fresh?.let {
+                    LocationUpdate(it.latitude, it.longitude, if (it.hasBearing()) it.bearing else null, it.accuracy)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("LocationHelper", "captureAccurateLocation failed", e)
+            null
         }
     }
 
@@ -119,7 +144,21 @@ class LocationHelper(context: Context) {
         // Looper, which is usually fine but has been inconsistent on some
         // OEM ROMs (Motorola in particular has a history of quirky location
         // update delivery). Being explicit removes that ambiguity.
-        fusedClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
+        try {
+            fusedClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
+        } catch (e: Exception) {
+            // Platform-level location failure (e.g. Location Services
+            // toggled off at the system level). Complete the flow
+            // gracefully (no cause) rather than closing it with the
+            // exception -- closing with a cause would rethrow it into
+            // whatever is combining this flow (the live compass/distance
+            // screen) and crash it. A graceful completion instead just
+            // leaves that screen frozen on its last known state, which is
+            // the better failure mode here.
+            Log.w("LocationHelper", "requestLocationUpdates failed", e)
+            close()
+            return@callbackFlow
+        }
         awaitClose { fusedClient.removeLocationUpdates(callback) }
     }
 }

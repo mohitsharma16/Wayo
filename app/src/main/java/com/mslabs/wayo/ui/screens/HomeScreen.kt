@@ -55,6 +55,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,12 +69,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mslabs.wayo.ui.MainViewModel
 import com.mslabs.wayo.ui.NavigationState
@@ -112,6 +116,30 @@ fun HomeScreen(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                     PackageManager.PERMISSION_GRANTED
         )
+    }
+
+    // Permission state above is only ever updated inside the permission-
+    // launcher callbacks, so it goes stale the moment permission changes
+    // outside of them -- most notably, the app's own "Open Settings"
+    // recovery path: the user grants location in system Settings, returns
+    // here via the back gesture (not a launcher result), and without this
+    // the screen would stay stuck showing "Location access was denied"
+    // forever. Rechecking on every resume covers that and the mirror case
+    // (permission revoked while backgrounded).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasLocationPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+                hasCameraPermission = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.CAMERA
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Tracks the case Android gives no way to recover from via a normal

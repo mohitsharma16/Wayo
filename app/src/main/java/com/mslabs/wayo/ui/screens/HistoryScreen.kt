@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,6 +60,7 @@ fun HistoryScreen(
     val history by viewModel.history.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -79,7 +81,14 @@ fun HistoryScreen(
                 modifier = Modifier.padding(padding),
                 onUnlock = {
                     haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                    activity?.let { viewModel.billingManager.launchPurchase(it) }
+                    val launched = activity?.let { viewModel.billingManager.launchPurchase(it) } ?: false
+                    if (!launched) {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Store isn't ready yet -- try again in a moment",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             )
             history.isEmpty() -> EmptyHistory(modifier = Modifier.padding(padding))
