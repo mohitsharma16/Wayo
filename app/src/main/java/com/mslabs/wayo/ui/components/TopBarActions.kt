@@ -39,20 +39,20 @@ fun ProBadge() {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Icon(
             Icons.Default.WorkspacePremium,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.tertiary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(14.dp)
         )
         Spacer(Modifier.width(4.dp))
         Text(
             "PRO",
             style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp),
-            color = MaterialTheme.colorScheme.tertiary
+            color = MaterialTheme.colorScheme.primary
         )
     }
 }

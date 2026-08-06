@@ -46,7 +46,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -374,7 +373,7 @@ private fun PermissionRationale(
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(24.dp))
-            FilledTonalButton(onClick = onRequestPermission) {
+            Button(onClick = onRequestPermission) {
                 Text("Continue", style = MaterialTheme.typography.labelLarge)
             }
         } else {
@@ -386,7 +385,7 @@ private fun PermissionRationale(
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(24.dp))
-            FilledTonalButton(onClick = onOpenSettings) {
+            Button(onClick = onOpenSettings) {
                 Text("Open Settings", style = MaterialTheme.typography.labelLarge)
             }
         }
@@ -468,7 +467,11 @@ private fun CaptureContent(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            // 0.dp, not a small elevation -- Card blends surfaceTint onto
+            // the container proportional to elevation, so any nonzero
+            // value here still shifts this away from the flat brand color
+            // set above.
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -492,7 +495,13 @@ private fun CaptureContent(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Card(shape = MaterialTheme.shapes.medium) {
+                        Card(
+                            shape = MaterialTheme.shapes.medium,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
                             PhotoThumbnail(capturedPhotoPath, size = 60.dp)
                         }
                         Spacer(Modifier.width(14.dp))

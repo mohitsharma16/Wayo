@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,10 +50,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mslabs.wayo.BuildConfig
+import com.mslabs.wayo.R
 import com.mslabs.wayo.data.ParkingSpot
 import com.mslabs.wayo.ui.MainViewModel
 import com.mslabs.wayo.ui.components.PhotoThumbnail
@@ -261,14 +264,14 @@ private fun EmptyHistory(modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .size(64.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                Icons.Default.History,
+                painterResource(R.drawable.ic_launcher_foreground),
                 contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                modifier = Modifier.size(30.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
         }
         Spacer(Modifier.height(16.dp))
@@ -301,14 +304,14 @@ private fun HistoryRow(spot: ParkingSpot, onDelete: () -> Unit) {
                 Box(
                     modifier = Modifier
                         .size(56.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium),
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), MaterialTheme.shapes.medium),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.History,
+                        Icons.Default.LocationOn,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp)
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
@@ -324,6 +327,21 @@ private fun HistoryRow(spot: ParkingSpot, onDelete: () -> Unit) {
                         note,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        formatCoordinates(spot.latitude, spot.longitude),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
             }
@@ -357,4 +375,11 @@ private fun formatTimestamp(millis: Long): String {
     }
 
     return SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(millis))
+}
+
+// 5 decimal places is roughly 1m of precision -- enough to distinguish
+// nearby spots without showing more digits than the GPS fix actually
+// justifies.
+private fun formatCoordinates(latitude: Double, longitude: Double): String {
+    return String.format(Locale.US, "%.5f, %.5f", latitude, longitude)
 }
