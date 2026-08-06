@@ -463,16 +463,12 @@ private fun CaptureContent(
         Spacer(Modifier.height(32.dp))
 
         Card(
+            modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = MaterialTheme.colorScheme.surface
             ),
-            // 0.dp, not a small elevation -- Card blends surfaceTint onto
-            // the container proportional to elevation, so any nonzero
-            // value here still shifts this away from the flat brand color
-            // set above.
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            modifier = Modifier.fillMaxWidth()
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 OutlinedTextField(
