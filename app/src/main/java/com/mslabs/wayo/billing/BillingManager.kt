@@ -2,6 +2,7 @@ package com.mslabs.wayo.billing
 
 import android.app.Activity
 import android.content.Context
+import com.mslabs.wayo.BuildConfig
 import com.android.billingclient.api.AcknowledgePurchaseParams
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
@@ -164,5 +165,18 @@ class BillingManager(private val context: Context) {
     private fun setIsPro(value: Boolean) {
         _isPro.value = value
         prefs.edit().putBoolean(KEY_IS_PRO, value).apply()
+    }
+
+    /**
+     * Debug-only escape hatch for exercising the paywall/unlock UI without a
+     * real Play purchase. No-ops in release builds (BuildConfig.DEBUG is a
+     * compile-time constant there, so this whole branch is dead code and
+     * gets stripped -- it can't be reached in a release build regardless of
+     * how it's called).
+     */
+    fun debugToggleIsPro() {
+        if (BuildConfig.DEBUG) {
+            setIsPro(!_isPro.value)
+        }
     }
 }

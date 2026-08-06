@@ -20,6 +20,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -341,7 +343,9 @@ private fun PermissionRationale(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(32.dp)
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(32.dp)
     ) {
         Box(
             modifier = Modifier
@@ -405,6 +409,7 @@ private fun CaptureContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 32.dp, vertical = 16.dp)
     ) {
         // A small branded hero instead of dropping straight into a form --
@@ -443,6 +448,17 @@ private fun CaptureContent(
             "Mark where you parked and Wayo will guide you straight back to it.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        // Sets the right expectation upfront rather than letting people
+        // discover GPS's real-world limits mid-use and read it as the app
+        // being wrong -- phone GPS just can't pinpoint an exact spot, only
+        // narrow things down to a nearby area.
+        Text(
+            "GPS gets you close, not exact -- expect the general area, not the precise spot.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(32.dp))
@@ -637,8 +653,9 @@ private fun CompassContent(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .padding(horizontal = 32.dp)
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 32.dp, vertical = 16.dp)
     ) {
         Card(
             shape = MaterialTheme.shapes.extraLarge,
@@ -660,7 +677,7 @@ private fun CompassContent(
                     .padding(28.dp)
             ) {
                 if (navState.isArrived) {
-                    ArrivedContent(accuracyMeters = navState.gpsAccuracyMeters)
+                    ArrivedContent(arrivalRadiusMeters = navState.arrivalRadiusMeters)
                 } else {
                     CompassDial(
                         rotationDegrees = arrowRotation,
@@ -739,14 +756,14 @@ private fun CompassContent(
 }
 
 /**
- * Shown once distance settles within GPS's own margin of error. Rather than
- * showing a small number that jitters forever and never quite reaches "0m"
- * (a real limitation of phone GPS, not a bug), this is an honest, clear
- * signal: you're close enough that GPS itself can't tell you apart from
- * the marked spot.
+ * Shown once distance settles within the arrival radius -- which factors in
+ * BOTH live GPS accuracy and however accurate the fix was when the spot was
+ * originally marked (see MainViewModel's arrivalRadius calculation). Showing
+ * that actual number here, not just live accuracy, is what makes it legible
+ * when this radius is wider than expected instead of it just looking stuck.
  */
 @Composable
-private fun ArrivedContent(accuracyMeters: Float) {
+private fun ArrivedContent(arrivalRadiusMeters: Float) {
     val infiniteTransition = rememberInfiniteTransition(label = "arrivedPulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -802,7 +819,7 @@ private fun ArrivedContent(accuracyMeters: Float) {
     )
     Spacer(Modifier.height(4.dp))
     Text(
-        "GPS is accurate to about ${accuracyMeters.toInt()}m -- look around this area",
+        "You're within about ${arrivalRadiusMeters.toInt()}m -- look around this area",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         textAlign = TextAlign.Center

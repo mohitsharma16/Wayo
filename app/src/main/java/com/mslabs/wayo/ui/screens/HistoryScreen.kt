@@ -16,9 +16,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -98,6 +101,18 @@ fun HistoryScreen(
                     }
                 },
                 actions = {
+                    if (BuildConfig.DEBUG) {
+                        IconButton(onClick = {
+                            viewModel.billingManager.debugToggleIsPro()
+                            android.widget.Toast.makeText(
+                                context,
+                                if (isPro) "DEBUG: Pro turned OFF" else "DEBUG: Pro turned ON",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }) {
+                            Icon(Icons.Default.BugReport, contentDescription = "Debug: toggle Pro status")
+                        }
+                    }
                     ThemeToggleButton(isDarkTheme = isDarkTheme, onToggle = { viewModel.toggleTheme() })
                 }
             )
@@ -163,6 +178,7 @@ private fun PaywallContent(modifier: Modifier = Modifier, onUnlock: () -> Unit) 
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -236,7 +252,9 @@ private fun FeatureChip(icon: ImageVector, label: String) {
 @Composable
 private fun EmptyHistory(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

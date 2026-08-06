@@ -56,6 +56,17 @@ data class NavigationState(
         // even on an excellent GPS day -- consumer phone GPS realistically
         // can't do meaningfully better than this outdoors.
         const val ARRIVAL_FLOOR_METERS = 8f
+
+        // ...and never require WORSE precision than this either. Without a
+        // ceiling, a single poor GPS fix at the moment "Mark this spot" was
+        // tapped (captureAccuracyMeters) sets that spot's arrival radius
+        // permanently -- even once live GPS is excellent, the quadrature
+        // combination below can never shrink back below whatever that one
+        // bad capture was. That made "you're here" stick long after
+        // actually walking away, with no way to tell why. Capping it keeps
+        // the "honor the capture's own uncertainty" idea (see below) from
+        // making the app stop being useful as a locator.
+        const val ARRIVAL_CEILING_METERS = 20f
     }
 }
 
@@ -131,12 +142,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         location.latitude, location.longitude, spot.latitude, spot.longitude
                     )
 
-                    // Low-pass filter on distance, same idea as the existing
-                    // compass heading smoothing -- GPS position noise alone
-                    // makes raw distance visibly jitter even standing still;
-                    // this settles it into a steadier number instead of a
-                    // number that jumps around every 1-2 seconds.
-                    smoothedDistance = smoothedDistance?.let { it + 0.3f * (rawDistance - it) }
+                    // Low-pass filter on distance -- GPS position noise
+                    // alone makes raw distance visibly jitter even standing
+                    // still, so this settles it into a steadier number
+                    // instead of one that jumps around every 1-2 seconds.
+                    //
+                    // Kept symmetric on purpose: an earlier version reacted
+                    // fast to increases and slow to decreases (to leave
+                    // "you're here" promptly when actually walking away).
+                    // But GPS noise fluctuates in BOTH directions even
+                    // while stationary, and a fast-up/slow-down filter
+                    // absorbs every noisy uptick quickly while correcting
+                    // back down only slowly -- across repeated fluctuations
+                    // that's a one-way ratchet, and the displayed distance
+                    // drifts upward over time even when not moving at all.
+                    // A single symmetric alpha has no such bias; the
+                    // arrival radius ceiling (see NavigationState) is what
+                    // actually keeps "leaving" responsive now.
+                    smoothedDistance = smoothedDistance?.let { it + 0.35f * (rawDistance - it) }
                         ?: rawDistance
                     val distance = smoothedDistance ?: rawDistance
 
@@ -158,7 +181,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         location.accuracyMeters * location.accuracyMeters +
                                 spot.captureAccuracyMeters * spot.captureAccuracyMeters
                     )
-                    val arrivalRadius = maxOf(combinedUncertainty, NavigationState.ARRIVAL_FLOOR_METERS)
+                    val arrivalRadius = combinedUncertainty
+                        .coerceIn(NavigationState.ARRIVAL_FLOOR_METERS, NavigationState.ARRIVAL_CEILING_METERS)
 
                     NavigationState(
                         bearing = bearing,
