@@ -25,9 +25,13 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -139,7 +143,7 @@ fun HistoryScreen(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
                             MaterialTheme.colorScheme.background
                         ),
                         radius = 1200f
@@ -161,15 +165,19 @@ fun HistoryScreen(
                         }
                     }
                 )
-                history.isEmpty() -> EmptyHistory()
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(history, key = { it.id }) { spot ->
-                        HistoryRow(spot, onDelete = { viewModel.deleteFromHistory(spot) })
+                    if (history.isEmpty()) {
+                        item { EmptyHistory() }
+                    } else {
+                        items(history, key = { it.id }) { spot ->
+                            HistoryRow(spot, onDelete = { viewModel.deleteFromHistory(spot) })
+                        }
                     }
+                    item { ComingSoonSection() }
                 }
             }
         }
@@ -256,10 +264,9 @@ private fun FeatureChip(icon: ImageVector, label: String) {
 private fun EmptyHistory(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .fillMaxWidth()
+            .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
@@ -281,6 +288,89 @@ private fun EmptyHistory(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+/**
+ * Pro-only teaser for what's next, shown at the bottom of History -- a
+ * concrete reason for an already-paying user to keep expecting more value,
+ * not just a static "you're done" screen.
+ */
+@Composable
+private fun ComingSoonSection(modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text(
+            "Coming soon",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "More Pro features are on the way.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(16.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ComingSoonRow(
+                icon = Icons.Default.PhotoLibrary,
+                title = "Memory Lane",
+                description = "Look back at every spot you've ever parked, with photos and notes."
+            )
+            ComingSoonRow(
+                icon = Icons.Default.Map,
+                title = "Turn-by-turn directions",
+                description = "Navigate back to any past spot with full Google Maps directions."
+            )
+            ComingSoonRow(
+                icon = Icons.Default.Groups,
+                title = "Community",
+                description = "Share and discover parking spots with people nearby."
+            )
+            ComingSoonRow(
+                icon = Icons.Default.MoreHoriz,
+                title = "And more",
+                description = "New Pro features are on the way -- stay tuned."
+            )
+        }
+    }
+}
+
+@Composable
+private fun ComingSoonRow(icon: ImageVector, title: String, description: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
