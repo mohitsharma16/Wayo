@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wayo — Engineering Case Study</title>
+<style>
+  :root {
+    --bg: #F6F8F9;
+    --surface: #FFFFFF;
+    --surface-2: #E9EEF0;
+    --surface-3: #DFE5E7;
+    --ink: #141A1E;
+    --ink-soft: #4D5A61;
+    --ink-faint: #7C8A91;
+    --accent: #00A98D;
+    --accent-ink: #FFFFFF;
+    --accent-2: #E5503F;
+    --line: #C7D0D4;
+    --shadow: 0 1px 2px rgba(20,26,30,0.04), 0 8px 24px rgba(20,26,30,0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0A0E13;
+      --surface: #13191F;
+      --surface-2: #1C242C;
+      --surface-3: #232C34;
+      --ink: #E7ECEF;
+      --ink-soft: #AAB4BC;
+      --ink-faint: #6D7A82;
+      --accent: #00E6C3;
+      --accent-ink: #0A0E13;
+      --accent-2: #FF6B5B;
+      --line: #2A333B;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0A0E13;
+    --surface: #13191F;
+    --surface-2: #1C242C;
+    --surface-3: #232C34;
+    --ink: #E7ECEF;
+    --ink-soft: #AAB4BC;
+    --ink-faint: #6D7A82;
+    --accent: #00E6C3;
+    --accent-ink: #0A0E13;
+    --accent-2: #FF6B5B;
+    --line: #2A333B;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  body {
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 64px 28px 96px;
+  }
+
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  /* ---------- Header ---------- */
+
+  .hero {
+    position: relative;
+    padding: 40px 36px 36px;
+    border-radius: 20px;
+    background:
+      radial-gradient(120% 140% at 12% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+      var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .mark::after {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 16px solid var(--accent);
+    transform: rotate(-38deg) translateY(1px);
+  }
+
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 10px;
+  }
+
+  h1.title {
+    font-size: clamp(40px, 6vw, 56px);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+
+  .tagline {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 56ch;
+    margin: 0 0 26px;
+    text-wrap: balance;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 12.5px;
+    padding: 6px 11px;
+    border-radius: 7px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  /* ---------- Sections ---------- */
+
+  section {
+    margin-top: 56px;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .section-head .bar {
+    width: 3px;
+    height: 20px;
+    background: var(--accent);
+    border-radius: 2px;
+    flex-shrink: 0;
+    transform: translateY(2px);
+  }
+
+  h2 {
+    font-size: 24px;
+    letter-spacing: -0.015em;
+    font-weight: 750;
+    margin: 0;
+  }
+
+  .lede {
+    font-size: 16.5px;
+    line-height: 1.65;
+    color: var(--ink-soft);
+    max-width: 66ch;
+  }
+
+  .lede strong { color: var(--ink); font-weight: 650; }
+
+  /* ---------- Feature list ---------- */
+
+  .feature-list {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .feature-list li {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    padding: 13px 4px;
+    border-top: 1px solid var(--line);
+    font-size: 15.5px;
+    line-height: 1.55;
+  }
+  .feature-list li:last-child { border-bottom: 1px solid var(--line); }
+
+  .feature-list .tick {
+    color: var(--accent);
+    font-weight: 700;
+    padding-top: 1px;
+  }
+
+  .feature-list b { font-weight: 650; }
+  .feature-list span.sub { color: var(--ink-soft); }
+
+  /* ---------- Architecture ---------- */
+
+  .arch-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 22px 0 24px;
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 13px;
+  }
+
+  .arch-node {
+    padding: 9px 13px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+  }
+  .arch-arrow { color: var(--ink-faint); font-size: 15px; }
+
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+  }
+
+  .module-card {
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .module-card .path {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .module-card p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+
+  /* ---------- Highlight cards ---------- */
+
+  .highlights {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  .highlight {
+    padding: 20px 22px;
+    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    border-left: 3px solid var(--accent);
+  }
+
+  .highlight h3 {
+    font-size: 16px;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .highlight p {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+  }
+
+  .highlight code {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 0.92em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--ink);
+  }
+
+  /* ---------- Stack ---------- */
+
+  .stack-group {
+    margin-bottom: 18px;
+  }
+  .stack-group:last-child { margin-bottom: 0; }
+
+  .stack-label {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 10px;
+  }
+
+  .stack-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .stack-chip {
+    font-size: 13.5px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+
+  /* ---------- Roadmap ---------- */
+
+  .roadmap-list {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .roadmap-item {
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    border: 1px dashed var(--line);
+  }
+  .roadmap-item b { display: block; margin-bottom: 3px; font-size: 14.5px; }
+  .roadmap-item span { font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
+
+  /* ---------- Talking points ---------- */
+
+  .facts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .fact dt {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 4px;
+  }
+  .fact dd {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pitch-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 12px;
+  }
+  .pitch-list li {
+    padding: 16px 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .pitch-list li::before {
+    content: "\201C";
+    color: var(--accent);
+    font-weight: 800;
+    margin-right: 2px;
+  }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .highlight, .module-card, .stack-chip { transition: border-color 0.15s ease; }
+    .highlight:hover, .module-card:hover { border-color: var(--accent); }
+  }
+
+  @media (max-width: 520px) {
+    .page { padding: 40px 18px 72px; }
+    .hero { padding: 30px 22px 28px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <div class="mark" aria-hidden="true"></div>
+    <p class="eyebrow">Engineering case study — Android</p>
+    <h1 class="title">Wayo</h1>
+    <p class="tagline">A native Android app that remembers exactly where you parked and turns your phone into a live compass pointing straight back to it.</p>
+    <div class="meta-row">
+      <span class="chip">Kotlin</span>
+      <span class="chip">Jetpack Compose</span>
+      <span class="chip">Material 3</span>
+      <span class="chip">Room</span>
+      <span class="chip">Play Billing</span>
+      <span class="chip">Solo build</span>
+      <span class="chip">API 26–37</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-head"><span class="bar"></span><h2>The problem it solves</h2></div>
+    <p class="lede">Most parking-finder apps either run background GPS tracking the whole time you're driving — a battery and privacy cost most people don't want to pay — or hand you a flat map pin with no real sense of <strong>which way</strong> or <strong>how far</strong>. Wayo does neither: nothing runs until you deliberately tap "mark this spot," and from that moment on the app behaves like a directional locator, not a map — a rotating compass needle and a live distance readout, closer in spirit to Apple's Find My "Precision Finding" than to a maps app.</p>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="bar"></span><h2>What it does</h2></div>
+    <ul class="feature-list">
+      <li><span class="tick">＋</span><span><b>Mark a spot</b> — captures GPS coordinates, with an optional photo and a text note attached. <span class="sub">Camera permission is fully optional; the app works without it.</span></span></li>
+      <li><span class="tick">＋</span><span><b>Live compass back to it</b> — a custom-drawn dial (not a rotated stock icon) tracks bearing and distance in real time, fed by GPS plus the phone's orientation sensors.</span></li>
+      <li><span class="tick">＋</span><span><b>Arrival detection</b> — the app tells you when you're actually within reach of the spot, factoring in how accurate the original GPS fix was, not just live signal quality.</span></li>
+      <li><span class="tick">＋</span><span><b>History, unlocked once</b> — Pro users keep every past spot (photo, note, coordinates, timestamp); free users get the live locator only. <span class="sub">One-time purchase — no subscription, no account required.</span></span></li>
+      <li><span class="tick">＋</span><span><b>Light and dark themes</b> — a deliberate teal-on-navy palette (dark-first, since this is realistically opened in a dim parking garage), with the user's explicit toggle choice persisted independently of the system setting.</span></li>
+      <li><span class="tick">＋</span><span><b>Built for current Android</b> — targets Android 17 (API 37) with edge-to-edge enforced, adaptive layout for large/foldable screens, and the modern Splash Screen API.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="bar"></span><h2>Architecture</h2></div>
+    <p class="lede">Single-Activity, 100% Jetpack Compose, MVVM. A typed <code style="font-family:ui-monospace,monospace;background:var(--surface-2);padding:1px 6px;border-radius:4px;">Navigation 3</code> back stack replaces any hand-rolled screen-state logic, and one reactive pipeline drives the entire navigation screen:</p>
+
+    <div class="arch-flow">
+      <span class="arch-node">activeSpot (Room)</span>
+      <span class="arch-arrow">→</span>
+      <span class="arch-node">flatMapLatest</span>
+      <span class="arch-arrow">→</span>
+      <span class="arch-node">combine(GPS, compass)</span>
+      <span class="arch-arrow">→</span>
+      <span class="arch-node">NavigationState</span>
+      <span class="arch-arrow">→</span>
+      <span class="arch-node">Compose UI</span>
+    </div>
+
+    <p class="lede" style="margin-bottom:20px;">Scoped deliberately: GPS and the compass sensor only subscribe while there's an active spot to navigate to, and stop the instant it's cleared — not after a delay.</p>
+
+    <div class="module-grid">
+      <div class="module-card"><span class="path">ui/</span><p>Screens, shared components, and the full Material 3 theme.</p></div>
+      <div class="module-card"><span class="path">data/</span><p>Room entity, DAO, and a thin repository — the only thing that touches persistence.</p></div>
+      <div class="module-card"><span class="path">location/</span><p>Fused Location Provider wrapper with its own accuracy strategy.</p></div>
+      <div class="module-card"><span class="path">sensor/</span><p>Rotation-vector compass with a device-fallback chain and smoothing.</p></div>
+      <div class="module-card"><span class="path">billing/</span><p>Google Play Billing wrapper for the one-time unlock.</p></div>
+      <div class="module-card"><span class="path">util/</span><p>Bearing/distance math and EXIF-aware photo handling.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="bar"></span><h2>Technical highlights</h2></div>
+    <p class="lede" style="margin-bottom:20px;">The parts worth talking through in an interview — real bugs that were found and root-caused, not just features that were added.</p>
+    <div class="highlights">
+      <div class="highlight">
+        <h3>A GPS fix you can actually trust</h3>
+        <p>Marking a spot doesn't grab whichever location arrives first. <code>captureAccurateLocation()</code> watches a short, timeout-bounded burst of live updates and keeps the best one seen — because a single fast-but-rough network-based fix silently poisons every future distance reading against that anchor point, even once live GPS is working perfectly.</p>
+      </div>
+      <div class="highlight">
+        <h3>An arrival radius that's honest about uncertainty</h3>
+        <p>"You've arrived" combines <em>two</em> independent error sources — live GPS accuracy and the accuracy of the original capture — via quadrature (root-sum-square), the statistically correct way to combine them, then clamps the result to an 8–20m band so it's never impossibly strict or uselessly loose.</p>
+      </div>
+      <div class="highlight">
+        <h3>Smoothing without drift</h3>
+        <p>The live distance readout runs through a symmetric low-pass filter to kill GPS jitter. An earlier asymmetric version (fast to react to increases, slow to decrease) was deliberately rejected — it acts as a one-way ratchet under noise and drifts the displayed distance upward over time even while standing still.</p>
+      </div>
+      <div class="highlight">
+        <h3>A compass that degrades gracefully</h3>
+        <p>Tries the fused rotation-vector sensor first, falls back to raw accelerometer + magnetometer, and falls back again to GPS course-over-ground on devices with no usable orientation sensor at all — confirmed to genuinely happen on some hardware despite the spec sheet. Axis remapping accounts for the device's current display rotation.</p>
+      </div>
+      <div class="highlight">
+        <h3>Billing that survives refunds and new devices</h3>
+        <p>Pro status is cached locally for an instant "unlocked" UI on launch, but reconciled against a real Play Billing query every time — so a refund, chargeback, or a purchase restored on a new device is always reflected correctly, not just trusted forever from a local flag.</p>
+      </div>
+      <div class="highlight">
+        <h3>Theming taken all the way through</h3>
+        <p>A full custom Material 3 color scheme — including the tonal/container roles most apps leave on Material's default purple — matched end-to-end to the splash screen, launcher icon, and native window background, so there's no flash of a mismatched color before Compose paints its first frame.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="bar"></span><h2>Tech stack</h2></div>
+    <div class="stack-group">
+      <p class="stack-label">Language &amp; UI</p>
+      <div class="stack-chips">
+        <span class="stack-chip">Kotlin</span>
+        <span class="stack-chip">Jetpack Compose</span>
+        <span class="stack-chip">Material 3</span>
+        <span class="stack-chip">Navigation 3</span>
+      </div>
+    </div>
+    <div class="stack-group">
+      <p class="stack-label">Architecture &amp; async</p>
+      <div class="stack-chips">
+        <span class="stack-chip">MVVM</span>
+        <span class="stack-chip">AndroidViewModel</span>
+        <span class="stack-chip">Kotlin Coroutines</span>
+        <span class="stack-chip">StateFlow / Flow</span>
+      </div>
+    </div>
+    <div class="stack-group">
+      <p class="stack-label">Data</p>
+      <div class="stack-chips">
+        <span class="stack-chip">Room</span>
+        <span class="stack-chip">KSP</span>
+        <span class="stack-chip">kotlinx.serialization</span>
+      </div>
+    </div>
+    <div class="stack-group">
+      <p class="stack-label">Platform</p>
+      <div class="stack-chips">
+        <span class="stack-chip">Fused Location Provider</span>
+        <span class="stack-chip">SensorManager</span>
+        <span class="stack-chip">CameraX intent + EXIF</span>
+        <span class="stack-chip">Splash Screen API</span>
+        <span class="stack-chip">Edge-to-edge</span>
+      </div>
+    </div>
+    <div class="stack-group">
+      <p class="stack-label">Monetization</p>
+      <div class="stack-chips">
+        <span class="stack-chip">Google Play Billing (billing-ktx)</span>
+        <span class="stack-chip">One-time managed product</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="bar"></span><h2>Roadmap (already teased in-app)</h2></div>
+    <p class="lede" style="margin-bottom:16px;">Pro users see a "Coming soon" section in History — a concrete product roadmap, not just a shipped v1:</p>
+    <ul class="roadmap-list">
+      <li class="roadmap-item"><b>Memory Lane</b><span>Look back through every spot ever parked, with photos and notes.</span></li>
+      <li class="roadmap-item"><b>Turn-by-turn directions</b><span>Full Google Maps directions back to any past spot, not just a straight-line compass.</span></li>
+      <li class="roadmap-item"><b>Community</b><span>Share and discover parking spots with people nearby.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="bar"></span><h2>Quick facts</h2></div>
+    <dl class="facts-grid">
+      <div class="fact"><dt>Role</dt><dd>Solo — design + build</dd></div>
+      <div class="fact"><dt>Platform</dt><dd>Android (native)</dd></div>
+      <div class="fact"><dt>Min SDK</dt><dd>26</dd></div>
+      <div class="fact"><dt>Target SDK</dt><dd>37 (Android 17)</dd></div>
+      <div class="fact"><dt>Monetization</dt><dd>One-time IAP</dd></div>
+      <div class="fact"><dt>Package</dt><dd>com.mslabs.wayo</dd></div>
+    </dl>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="bar"></span><h2>Ready-to-use talking points</h2></div>
+    <ul class="pitch-list">
+      <li>Designed and built Wayo, a native Android parking-locator app, end to end — architecture, UI, sensor integration, and Play Store monetization — as a solo project in Kotlin and Jetpack Compose.</li>
+      <li>Implemented a sensor-fusion navigation pipeline combining GPS and device orientation sensors, including a statistically-grounded uncertainty model (quadrature error combination) to decide arrival honestly rather than by a fixed distance.</li>
+      <li>Diagnosed and fixed a subtle asymmetric-smoothing bug that caused displayed distance to silently drift upward over time — replaced with a symmetric low-pass filter after reasoning through the failure mode.</li>
+      <li>Integrated Google Play Billing for a one-time purchase, including purchase acknowledgment, cross-device restore reconciliation, and cache-first state for instant UI response.</li>
+      <li>Built a complete custom Material 3 theming system — light and dark palettes, full tonal/container role coverage — matched end-to-end across splash screen, launcher icon, and in-app UI.</li>
+    </ul>
+  </section>
+
+  <footer>Wayo · built with Kotlin, Jetpack Compose, and Material 3.</footer>
+
+</div>
+</body>
+</html>
