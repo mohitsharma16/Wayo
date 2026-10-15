@@ -12,3 +12,6 @@ data object Home : NavKey
 
 @Serializable
 data object History : NavKey
+
+@Serializable
+data class SpotDetail(val spotId: String) : NavKey

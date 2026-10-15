@@ -38,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
@@ -48,6 +49,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -85,6 +87,8 @@ import com.mslabs.wayo.ui.MainViewModel
 import com.mslabs.wayo.ui.NavigationState
 import com.mslabs.wayo.ui.components.CompassDial
 import com.mslabs.wayo.ui.components.PhotoThumbnail
+import com.mslabs.wayo.ui.components.PhotoViewerDialog
+import com.mslabs.wayo.ui.components.rememberDetailedNavigation
 import com.mslabs.wayo.ui.components.ProBadge
 import com.mslabs.wayo.ui.components.ThemeToggleButton
 import com.mslabs.wayo.util.PhotoUtils
@@ -106,6 +110,7 @@ fun HomeScreen(
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
 
     val activity = LocalActivity.current
+    val startDetailedNavigation = rememberDetailedNavigation(viewModel)
 
     // --- Combined permission state ---
     // Both permissions are now explained and requested together, upfront,
@@ -324,6 +329,7 @@ fun HomeScreen(
                     HomeState.NAVIGATE -> CompassContent(
                         navState = navState,
                         photoPath = activeSpot?.photoPath,
+                        onDetailedNavigation = { activeSpot?.let(startDetailedNavigation) },
                         onFoundIt = { viewModel.foundCar() }
                     )
                 }
@@ -635,9 +641,11 @@ private fun MarkSpotButton(isLoading: Boolean, onClick: () -> Unit) {
 private fun CompassContent(
     navState: NavigationState,
     photoPath: String?,
+    onDetailedNavigation: () -> Unit,
     onFoundIt: () -> Unit
 ) {
     val context = LocalContext.current
+    var viewingPhoto by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val arrowRotation = (navState.bearing - navState.heading + 360) % 360
 
@@ -741,11 +749,22 @@ private fun CompassContent(
         photoPath?.let {
             Spacer(Modifier.height(20.dp))
             Card(shape = MaterialTheme.shapes.large) {
-                PhotoThumbnail(it, size = 88.dp)
+                PhotoThumbnail(it, size = 88.dp, onClick = { viewingPhoto = true })
+            }
+            if (viewingPhoto) {
+                PhotoViewerDialog(path = it, onDismiss = { viewingPhoto = false })
             }
         }
 
         Spacer(Modifier.height(28.dp))
+
+        OutlinedButton(onClick = onDetailedNavigation) {
+            Icon(Icons.Default.Directions, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Get detailed navigation", style = MaterialTheme.typography.labelLarge)
+        }
+
+        Spacer(Modifier.height(12.dp))
 
         Button(
             onClick = {

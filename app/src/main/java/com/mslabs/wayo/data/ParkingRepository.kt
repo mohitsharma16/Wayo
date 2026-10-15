@@ -30,15 +30,12 @@ class ParkingRepository(private val dao: ParkingSpotDao) {
     }
 
     /**
-     * Called when the user finds their car.
-     * Pro users keep it in history; free users have it deleted outright.
+     * Called when the user finds their car. Every spot is kept in history;
+     * how many of them are visible is decided by the view model (free users
+     * see only the most recent few until they unlock full access).
      */
-    suspend fun foundCar(keepInHistory: Boolean) {
-        if (keepInHistory) {
-            dao.deactivateAllActive()
-        } else {
-            dao.deleteActiveSpots()
-        }
+    suspend fun foundCar() {
+        dao.deactivateAllActive()
     }
 
     suspend fun deleteFromHistory(spot: ParkingSpot) {

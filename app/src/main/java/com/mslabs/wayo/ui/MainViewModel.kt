@@ -70,6 +70,12 @@ data class NavigationState(
     }
 }
 
+data class HistoryUiState(
+    val visible: List<ParkingSpot> = emptyList(),
+    // Saved spots hidden because the free tier's history limit is reached.
+    val lockedCount: Int = 0
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ParkingRepository(
@@ -82,8 +88,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val activeSpot: StateFlow<ParkingSpot?> = repository.activeSpot
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val history: StateFlow<List<ParkingSpot>> = repository.history
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Free users only see their most recent FREE_HISTORY_LIMIT spots. The
+    // rest stay in the database (not deleted), so they reappear on purchase.
+    val historyState: StateFlow<HistoryUiState> =
+        combine(repository.history, billingManager.isPro) { all, pro ->
+            if (pro) HistoryUiState(all, 0)
+            else HistoryUiState(
+                visible = all.take(FREE_HISTORY_LIMIT),
+                lockedCount = (all.size - FREE_HISTORY_LIMIT).coerceAtLeast(0)
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HistoryUiState())
 
     val isPro: StateFlow<Boolean> = billingManager.isPro
 
@@ -231,11 +245,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun foundCar() {
         viewModelScope.launch {
-            repository.foundCar(keepInHistory = isPro.value)
+            repository.foundCar()
         }
     }
 
+    private val usagePrefs = application.getSharedPreferences(USAGE_PREFS_NAME, Context.MODE_PRIVATE)
+
+    /** Pro users always can; free users get exactly one detailed navigation. */
+    fun canUseDetailedNavigation(): Boolean =
+        isPro.value || !usagePrefs.getBoolean(KEY_FREE_NAV_USED, false)
+
+    /** Call only after maps actually opened, so a failed launch doesn't burn the free use. */
+    fun recordDetailedNavigationUse() {
+        if (!isPro.value) usagePrefs.edit().putBoolean(KEY_FREE_NAV_USED, true).apply()
+    }
+
     fun deleteFromHistory(spot: ParkingSpot) {
+        // Free users can't delete: removing one of the visible spots would
+        // slide an older, locked one into view and defeat the history limit.
+        if (!isPro.value) return
         viewModelScope.launch {
             repository.deleteFromHistory(spot)
         }
@@ -244,5 +272,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val THEME_PREFS_NAME = "wayo_theme"
         private const val KEY_DARK_THEME = "is_dark_theme"
+        private const val USAGE_PREFS_NAME = "wayo_usage"
+        private const val KEY_FREE_NAV_USED = "free_detailed_nav_used"
+        const val FREE_HISTORY_LIMIT = 3
     }
 }

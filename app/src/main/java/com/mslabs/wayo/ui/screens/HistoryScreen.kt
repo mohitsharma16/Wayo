@@ -1,6 +1,5 @@
 package com.mslabs.wayo.ui.screens
 
-import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,8 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,7 +26,6 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
@@ -44,16 +40,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -64,6 +57,7 @@ import com.mslabs.wayo.data.ParkingSpot
 import com.mslabs.wayo.ui.MainViewModel
 import com.mslabs.wayo.ui.components.PhotoThumbnail
 import com.mslabs.wayo.ui.components.ThemeToggleButton
+import com.mslabs.wayo.ui.components.rememberUnlockAction
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -73,29 +67,14 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(
     viewModel: MainViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenSpot: (ParkingSpot) -> Unit
 ) {
     val isPro by viewModel.isPro.collectAsStateWithLifecycle()
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
-    val history by viewModel.history.collectAsStateWithLifecycle()
-    val activity = LocalActivity.current
-    val haptics = LocalHapticFeedback.current
+    val historyState by viewModel.historyState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
-    // One-time celebratory confirmation right when a purchase actually
-    // completes -- otherwise the only signal the user gets that their
-    // payment went through is the paywall silently swapping to the
-    // unlocked view, which doesn't feel like a purchase was acknowledged.
-    LaunchedEffect(Unit) {
-        viewModel.billingManager.purchaseCompleted.collect {
-            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-            android.widget.Toast.makeText(
-                context,
-                "Full access unlocked -- thank you!",
-                android.widget.Toast.LENGTH_LONG
-            ).show()
-        }
-    }
+    val unlock = rememberUnlockAction(viewModel)
 
     Scaffold(
         topBar = {
@@ -151,32 +130,27 @@ fun HistoryScreen(
                 )
                 .padding(padding)
         ) {
-            when {
-                !isPro -> PaywallContent(
-                    onUnlock = {
-                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                        val launched = activity?.let { viewModel.billingManager.launchPurchase(it) } ?: false
-                        if (!launched) {
-                            android.widget.Toast.makeText(
-                                context,
-                                "Store isn't ready yet -- try again in a moment",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                if (historyState.visible.isEmpty()) {
+                    item { EmptyHistory() }
+                } else {
+                    items(historyState.visible, key = { it.id }) { spot ->
+                        HistoryRow(
+                            spot,
+                            onClick = { onOpenSpot(spot) },
+                            onDelete = if (isPro) ({ viewModel.deleteFromHistory(spot) }) else null
+                        )
                     }
-                )
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    if (history.isEmpty()) {
-                        item { EmptyHistory() }
-                    } else {
-                        items(history, key = { it.id }) { spot ->
-                            HistoryRow(spot, onDelete = { viewModel.deleteFromHistory(spot) })
-                        }
+                }
+                if (!isPro) {
+                    item {
+                        LockedHistoryCard(lockedCount = historyState.lockedCount, onUnlock = unlock)
                     }
+                } else {
                     item { ComingSoonSection() }
                 }
             }
@@ -184,53 +158,63 @@ fun HistoryScreen(
     }
 }
 
+/**
+ * Shown to free users under their (up to) 3 visible spots. Always visible --
+ * even before the limit is hit -- so the upgrade path is discoverable.
+ */
 @Composable
-private fun PaywallContent(modifier: Modifier = Modifier, onUnlock: () -> Unit) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+private fun LockedHistoryCard(lockedCount: Int, onUnlock: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
-            contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                Icons.Default.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(30.dp),
-                tint = MaterialTheme.colorScheme.primary
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(26.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                if (lockedCount > 0) {
+                    "$lockedCount older ${if (lockedCount == 1) "spot is" else "spots are"} locked"
+                } else {
+                    "Free plan shows your last ${MainViewModel.FREE_HISTORY_LIMIT} spots"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center
             )
-        }
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "Unlock history, photos, and notes",
-            style = MaterialTheme.typography.titleLarge,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "One-time purchase. No subscription, no account.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(28.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            FeatureChip(icon = Icons.Default.History, label = "History")
-            FeatureChip(icon = Icons.Default.Camera, label = "Photos")
-            FeatureChip(icon = Icons.Default.Edit, label = "Notes")
-        }
-
-        Spacer(Modifier.height(28.dp))
-        Button(onClick = onUnlock) {
-            Text("Unlock full access", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Unlock your full history and unlimited detailed navigation. " +
+                    "One-time purchase. No subscription, no account.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                FeatureChip(icon = Icons.Default.History, label = "History")
+                FeatureChip(icon = Icons.Default.Camera, label = "Photos")
+                FeatureChip(icon = Icons.Default.Edit, label = "Notes")
+            }
+            Spacer(Modifier.height(18.dp))
+            Button(onClick = onUnlock) {
+                Text("Unlock full access", style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
@@ -317,11 +301,6 @@ private fun ComingSoonSection(modifier: Modifier = Modifier) {
                 description = "Look back at every spot you've ever parked, with photos and notes."
             )
             ComingSoonRow(
-                icon = Icons.Default.Map,
-                title = "Turn-by-turn directions",
-                description = "Navigate back to any past spot with full Google Maps directions."
-            )
-            ComingSoonRow(
                 icon = Icons.Default.Groups,
                 title = "Community",
                 description = "Share and discover parking spots with people nearby."
@@ -375,8 +354,9 @@ private fun ComingSoonRow(icon: ImageVector, title: String, description: String)
 }
 
 @Composable
-private fun HistoryRow(spot: ParkingSpot, onDelete: () -> Unit) {
+private fun HistoryRow(spot: ParkingSpot, onClick: () -> Unit, onDelete: (() -> Unit)?) {
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -435,12 +415,14 @@ private fun HistoryRow(spot: ParkingSpot, onDelete: () -> Unit) {
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete spot",
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                )
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete spot",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                    )
+                }
             }
         }
     }
