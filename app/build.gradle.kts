@@ -13,8 +13,8 @@ android {
         applicationId = "com.mslabs.wayo"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "v0.0.1"
+        versionCode = 3
+        versionName = "v0.1 .1"
     }
 
     buildTypes {
