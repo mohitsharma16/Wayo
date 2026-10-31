@@ -2,6 +2,7 @@
 
 A complete Android Studio project. Kotlin + Jetpack Compose (Material 3) + **Navigation 3** + Room (local-only) + Google Play Billing (one-time purchase). Targets **Android 17 (API 37)** with edge-to-edge enabled.
 
+The App is now available on google play store here is the link :- https://play.google.com/store/apps/details?id=com.mslabs.wayo&hl=en_IN
 ## How to open it
 
 1. Unzip this folder anywhere on your machine.
